@@ -1,0 +1,250 @@
+import { useState } from 'react'
+import { api } from '../api'
+import { DEFAULT_MODEL_FRONT, MODELS } from '../shared/models'
+
+const TYPE_META = {
+  numerical_swap:  { label:'Numerical Swap',  color:'#7F77DD', desc:'Same structure, different numbers' },
+  entity_swap:     { label:'Entity Swap',     color:'#378ADD', desc:'Neutral tokens replace named entities' },
+  structural_swap: { label:'Structural Swap', color:'#D85A30', desc:'Different underlying arithmetic operation' },
+}
+
+const METHOD_META = {
+  standard:    { label:'STD',    color:'#888780' },
+  zeroshotcot: { label:'ZS-CoT', color:'#378ADD' },
+  cot:         { label:'CoT',    color:'#639922' },
+  quasar:      { label:'QuaSAR', color:'#BA7517' },
+}
+
+export default function AdversarialPage() {
+  const [problem, setProblem] = useState('')
+  const [answer,  setAnswer]  = useState('')
+  const [types,   setTypes]   = useState(['numerical_swap','entity_swap','structural_swap'])
+  const [methods, setMethods] = useState(['standard','zeroshotcot','cot','quasar'])
+  const [model,   setModel]   = useState(DEFAULT_MODEL_FRONT)
+  const [loading, setLoading] = useState(false)
+  const [result,  setResult]  = useState(null)
+  const [error,   setError]   = useState(null)
+
+  const [loadingGSM, setLoadingGSM] = useState(false)
+
+  const loadRandom = async () => {
+    setLoadingGSM(true)
+    try {
+      const { problems } = await api.sampleGSM8K(1)
+      if (problems[0]) {
+        setProblem(problems[0].question)
+        setAnswer(String(problems[0].numeric_answer))
+      }
+    } catch {} finally { setLoadingGSM(false) }
+  }
+
+  const toggleType   = t => setTypes(p => p.includes(t) ? p.filter(x=>x!==t) : [...p, t])
+  const toggleMethod = m => setMethods(p => p.includes(m) ? p.filter(x=>x!==m) : [...p, m])
+
+  const run = async () => {
+    if (!problem.trim() || !answer) return
+    setLoading(true); setResult(null); setError(null)
+    try {
+      const data = await api.adversarial({
+        problem: problem.trim(),
+        answer: parseFloat(answer),
+        types, methods, model,
+      })
+      setResult(data)
+    } catch(e) { setError(e.message) }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div style={{ maxWidth:1100 }}>
+      <h1 style={{ fontSize:18, fontWeight:500, marginBottom:4 }}>Adversarial Evaluation Suite</h1>
+      <p className="muted" style={{ fontSize:12, marginBottom:20 }}>
+        Generate perturbed variants of a problem and compare method robustness across perturbation types.
+      </p>
+
+      {/* Input */}
+      <div style={{ background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', padding:16, marginBottom:20 }}>
+        <div style={{ display:'flex', gap:8, marginBottom:8 }}>
+          <button onClick={loadRandom} disabled={loadingGSM} style={{
+            background:'var(--bg3)', border:'1px solid var(--border2)', color:'var(--text2)', fontSize:11, padding:'3px 12px', borderRadius:4,
+          }}>
+            {loadingGSM ? '...' : '↻ Random GSM8K'}
+          </button>
+          <select value={model} onChange={e=>setModel(e.target.value)} style={{ padding:'3px 10px', fontSize:11, background:'var(--bg3)', borderColor:'var(--border2)', marginLeft:'auto' }}>
+            {MODELS.map(m => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
+
+        <textarea
+          value={problem}
+          onChange={e=>setProblem(e.target.value)}
+          placeholder="Enter a math word problem…"
+          rows={2}
+          style={{ width:'100%', padding:'10px 12px', lineHeight:1.65, resize:'vertical', marginBottom:8 }}
+        />
+
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
+          <span className="label">Ground truth answer</span>
+          <input
+            type="number"
+            value={answer}
+            onChange={e=>setAnswer(e.target.value)}
+            placeholder="42"
+            style={{ width:100, padding:'4px 10px', fontFamily:'var(--font-mono)' }}
+          />
+        </div>
+
+        <div style={{ display:'flex', gap:20, marginBottom:14, flexWrap:'wrap' }}>
+          <div>
+            <div className="label" style={{ marginBottom:6 }}>Perturbation types</div>
+            <div style={{ display:'flex', gap:6 }}>
+              {Object.entries(TYPE_META).map(([id, m]) => (
+                <button key={id} onClick={()=>toggleType(id)} style={{
+                  background: types.includes(id) ? m.color : 'var(--bg3)',
+                  color: types.includes(id) ? '#fff' : 'var(--text2)',
+                  border:`1px solid ${types.includes(id) ? m.color : 'var(--border2)'}`,
+                  padding:'4px 12px', fontSize:11, borderRadius:4,
+                }}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="label" style={{ marginBottom:6 }}>Methods</div>
+            <div style={{ display:'flex', gap:6 }}>
+              {Object.entries(METHOD_META).map(([id, m]) => (
+                <button key={id} onClick={()=>toggleMethod(id)} style={{
+                  background: methods.includes(id) ? m.color : 'var(--bg3)',
+                  color: methods.includes(id) ? '#fff' : 'var(--text2)',
+                  border:`1px solid ${methods.includes(id) ? m.color : 'var(--border2)'}`,
+                  padding:'4px 12px', fontSize:11, fontWeight:600, borderRadius:4,
+                }}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <button onClick={run} disabled={loading || !problem.trim() || !answer} style={{
+          background:'#BA7517', color:'#fff', padding:'8px 20px',
+          fontSize:11, fontWeight:500, letterSpacing:'0.1em', textTransform:'uppercase',
+        }}>
+          {loading ? '⏳ Generating & evaluating…' : '▶ Run Adversarial Suite'}
+        </button>
+
+        {error && <p style={{ fontSize:12, color:'#E24B4A', marginTop:8 }}>{error}</p>}
+      </div>
+
+      {/* Results */}
+      {result && <AdversarialResults result={result} methods={methods} />}
+    </div>
+  )
+}
+
+function AdversarialResults({ result, methods }) {
+  const { evaluation } = result
+  const [selected, setSelected] = useState(0)
+
+  return (
+    <div className="fade-in" style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      {/* Robustness summary table */}
+      <div style={{ background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', overflow:'hidden' }}>
+        <div style={{ padding:'10px 16px', borderBottom:'1px solid var(--border)' }}>
+          <span className="label">Robustness summary</span>
+          <span className="muted" style={{ fontSize:11, marginLeft:8 }}>✓ = correct answer extracted</span>
+        </div>
+        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+          <thead>
+            <tr style={{ background:'var(--bg3)' }}>
+              <th style={{ padding:'8px 16px', textAlign:'left', fontSize:10, color:'var(--text3)', fontWeight:500, letterSpacing:'0.08em', textTransform:'uppercase' }}>Problem variant</th>
+              {methods.map(m => (
+                <th key={m} style={{ padding:'8px 14px', textAlign:'center', fontSize:10, color:'var(--text3)', fontWeight:500, letterSpacing:'0.08em', textTransform:'uppercase' }}>
+                  {METHOD_META[m]?.label || m}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {evaluation.map((ev, i) => (
+              <tr key={i} style={{ borderTop: i ? '1px solid var(--border)' : 'none', cursor:'pointer', background: selected===i ? 'var(--bg3)' : 'transparent' }} onClick={()=>setSelected(i)}>
+                <td style={{ padding:'10px 16px' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <span style={{
+                      background: ev.type==='original' ? 'var(--bg3)' : (TYPE_META[ev.type]?.color || '#888'),
+                      color: ev.type==='original' ? 'var(--text2)' : '#fff',
+                      fontSize:9, fontWeight:600, padding:'2px 7px', borderRadius:3,
+                      fontFamily:'var(--font-mono)', letterSpacing:'0.05em',
+                    }}>
+                      {ev.label}
+                    </span>
+                    <span style={{ color:'var(--text2)', fontSize:11 }}>ans: <strong style={{ fontFamily:'var(--font-mono)' }}>{ev.ground_truth}</strong></span>
+                  </div>
+                </td>
+                {methods.map(m => {
+                  const mr = ev.methods[m]
+                  const correct = mr?.correct
+                  return (
+                    <td key={m} style={{ padding:'10px 14px', textAlign:'center' }}>
+                      <span style={{
+                        fontSize:14,
+                        color: correct ? '#639922' : '#E24B4A',
+                      }}>
+                        {correct ? '✓' : '✗'}
+                      </span>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Selected variant detail */}
+      {evaluation[selected] && (
+        <div style={{ background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', overflow:'hidden' }}>
+          <div style={{ padding:'10px 16px', borderBottom:'1px solid var(--border)' }}>
+            <span className="label">Detail — {evaluation[selected].label}</span>
+          </div>
+          <div style={{ padding:16 }}>
+            <div style={{
+              background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:'var(--radius)',
+              padding:'10px 14px', marginBottom:14, fontFamily:'var(--font-mono)', fontSize:12, lineHeight:1.65,
+            }}>
+              {evaluation[selected].problem}
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:10 }}>
+              {methods.map(m => {
+                const mr = evaluation[selected].methods[m]
+                const meta = METHOD_META[m] || { color:'#888', label:m }
+                return (
+                  <div key={m} style={{ border:`1px solid ${meta.color}28`, borderRadius:'var(--radius)', overflow:'hidden' }}>
+                    <div style={{ padding:'7px 12px', borderBottom:`1px solid ${meta.color}20`, display:'flex', alignItems:'center', gap:8 }}>
+                      <span style={{ background:meta.color, color:'#fff', fontSize:9, fontWeight:600, padding:'1px 7px', borderRadius:3, fontFamily:'var(--font-mono)' }}>{meta.label}</span>
+                      {mr && (
+                        <span style={{ marginLeft:'auto', fontSize:11, color: mr.correct ? '#639922':'#E24B4A' }}>
+                          {mr.correct ? '✓ correct' : `✗ extracted: ${mr.extracted_answer ?? '?'}`}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ padding:'10px 12px', maxHeight:160, overflowY:'auto' }}>
+                      <pre style={{ fontFamily:'var(--font-mono)', fontSize:10, lineHeight:1.7, whiteSpace:'pre-wrap', wordBreak:'break-word', color:'var(--text2)' }}>
+                        {mr?.text || '—'}
+                      </pre>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
