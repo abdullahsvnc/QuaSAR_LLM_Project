@@ -254,93 +254,122 @@ function AblationDetail({ detail }) {
   const { analysis, sap_delta, config } = detail
   if (!analysis) return <p className="muted" style={{ fontSize: 12 }}>No analysis data.</p>
 
-  const {
-    accuracy_by_depth, marginal_contribution, stage_wins,
-    stage_losses, depth_labels, stage_colors, sap_delta: _,
-  } = analysis
+  const { per_stage, full_accuracy, stage_colors } = analysis
+  const fallbackColors = ['#7F77DD', '#378ADD', '#639922', '#BA7517']
 
-  const DEPTH_IDS = ['quasar_1', 'quasar_2', 'quasar_3', 'quasar']
-  const STAGE_NAMES = ['Abstraction', 'Formalisation', 'Explanation', 'Answering']
-
-  const depthData = DEPTH_IDS.map((d, i) => ({
-    name:     STAGE_NAMES[i],
-    accuracy: parseFloat(((accuracy_by_depth[d] || 0) * 100).toFixed(1)),
-    marginal: parseFloat(((marginal_contribution[d] || 0) * 100).toFixed(1)),
-    wins:     stage_wins?.[d] || 0,
-    losses:   stage_losses?.[d] || 0,
-    color:    (stage_colors || ['#7F77DD', '#378ADD', '#639922', '#BA7517'])[i],
+  // Row per QuaSAR stage — keeps the legacy chart keys (`accuracy`, `marginal`)
+  // for the cumulative view and adds LOO + isolated columns.
+  const stageData = (per_stage || []).map((s, i) => ({
+    name:         s.name,
+    color:        s.color || (stage_colors || fallbackColors)[i],
+    cumAcc:       parseFloat(((s.cumulative_accuracy || 0) * 100).toFixed(1)),
+    cumMarginal:  parseFloat(((s.cumulative_marginal || 0) * 100).toFixed(1)),
+    looAcc:       parseFloat(((s.loo_accuracy || 0) * 100).toFixed(1)),
+    looDelta:     parseFloat(((s.loo_contribution || 0) * 100).toFixed(1)),
+    isoAcc:       parseFloat(((s.isolated_accuracy || 0) * 100).toFixed(1)),
+    looWins:      s.loo_wins || 0,
+    looLosses:    s.loo_losses || 0,
   }))
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ fontSize: 12, color: 'var(--text3)' }}>
         QuaSAR stage ablation · {config?.n} problems · {config?.model}
+        {typeof full_accuracy === 'number' && (
+          <> · full QuaSAR <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>
+            {(full_accuracy * 100).toFixed(1)}%
+          </strong></>
+        )}
       </div>
 
-      {/* Accuracy by depth */}
-      <ChartCard title="Accuracy by QuaSAR depth"
-        subtitle="Progressive stage accumulation — each bar includes all previous stages">
+      {/* Cumulative accuracy */}
+      <ChartCard title="Cumulative accuracy (progressive depth)"
+        subtitle="Accuracy when stages 1..k are all active — each bar includes all previous stages">
         <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={depthData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+          <BarChart data={stageData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={DARK_GRID} />
             <XAxis dataKey="name" tick={{ fill: DARK_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis domain={[0, 100]} unit="%" tick={{ fill: DARK_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
             <Tooltip
               contentStyle={{ background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 8, color: 'var(--text)', fontSize: 12 }}
-              formatter={v => [`${v}%`, 'Accuracy']}
+              formatter={v => [`${v}%`, 'Cumulative acc']}
             />
-            <Bar dataKey="accuracy" radius={[4, 4, 0, 0]}>
-              {depthData.map((d, i) => <Cell key={i} fill={d.color} />)}
+            <Bar dataKey="cumAcc" radius={[4, 4, 0, 0]}>
+              {stageData.map((d, i) => <Cell key={i} fill={d.color} />)}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>
 
-      {/* Marginal contribution */}
-      <ChartCard title="Marginal contribution per stage"
-        subtitle="Accuracy gain from adding each stage over the previous depth">
+      {/* Leave-one-out contribution */}
+      <ChartCard title="Leave-one-out contribution per stage"
+        subtitle="Acc(full) − Acc(full without stage k). Higher = stage is more indispensable.">
         <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={depthData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+          <BarChart data={stageData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={DARK_GRID} />
             <XAxis dataKey="name" tick={{ fill: DARK_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis unit="pp" tick={{ fill: DARK_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
             <Tooltip
               contentStyle={{ background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 8, color: 'var(--text)', fontSize: 12 }}
-              formatter={v => [`${v}pp`, 'Marginal gain']}
+              formatter={v => [`${v}pp`, 'LOO Δ']}
             />
-            <Bar dataKey="marginal" radius={[4, 4, 0, 0]}>
-              {depthData.map((d, i) => <Cell key={i} fill={d.color} />)}
+            <Bar dataKey="looDelta" radius={[4, 4, 0, 0]}>
+              {stageData.map((d, i) => <Cell key={i} fill={d.color} />)}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>
 
-      {/* Stage wins/losses table */}
-      <ChartCard title="Stage attribution" subtitle="Problems flipped correct/wrong by adding each stage">
+      {/* Isolated (single-stage) accuracy */}
+      <ChartCard title="Isolated — single-stage accuracy"
+        subtitle="Accuracy when only that single stage is active">
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={stageData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={DARK_GRID} />
+            <XAxis dataKey="name" tick={{ fill: DARK_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis domain={[0, 100]} unit="%" tick={{ fill: DARK_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
+            <Tooltip
+              contentStyle={{ background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 8, color: 'var(--text)', fontSize: 12 }}
+              formatter={v => [`${v}%`, 'Isolated acc']}
+            />
+            <Bar dataKey="isoAcc" radius={[4, 4, 0, 0]}>
+              {stageData.map((d, i) => <Cell key={i} fill={d.color} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartCard>
+
+      {/* Per-stage attribution table */}
+      <ChartCard title="Per-stage attribution"
+        subtitle="Cumulative, leave-one-out and isolated views side by side">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr style={{ background: 'var(--bg3)' }}>
-              {['Stage', 'Depth', 'Cumulative acc.', 'Marginal gain', 'Problems won', 'Problems lost'].map(h => (
+              {['Stage', 'Cum acc', 'Cum Δ', 'LOO acc', 'LOO Δ', 'Isolated acc', 'Full-only wins', 'LOO-only wins'].map(h => (
                 <th key={h} style={{ padding: '7px 12px', textAlign: 'left', fontSize: 10, color: 'var(--text3)', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {depthData.map((d, i) => (
+            {stageData.map((d, i) => (
               <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
                 <td style={{ padding: '9px 12px' }}>
                   <span style={{ background: d.color, color: '#fff', fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 3, fontFamily: 'var(--font-mono)' }}>
                     {d.name}
                   </span>
                 </td>
-                <td style={{ padding: '9px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text2)' }}>1–{i + 1}</td>
-                <td style={{ padding: '9px 12px', fontFamily: 'var(--font-mono)', fontWeight: 500 }}>{d.accuracy}%</td>
-                <td style={{ padding: '9px 12px', fontFamily: 'var(--font-mono)', color: d.marginal > 0 ? '#639922' : d.marginal < 0 ? '#E24B4A' : 'var(--text3)' }}>
-                  {d.marginal > 0 ? '+' : ''}{d.marginal}pp
+                <td style={{ padding: '9px 12px', fontFamily: 'var(--font-mono)', fontWeight: 500 }}>{d.cumAcc}%</td>
+                <td style={{ padding: '9px 12px', fontFamily: 'var(--font-mono)', color: d.cumMarginal > 0 ? '#639922' : d.cumMarginal < 0 ? '#E24B4A' : 'var(--text3)' }}>
+                  {d.cumMarginal > 0 ? '+' : ''}{d.cumMarginal}pp
                 </td>
-                <td style={{ padding: '9px 12px', color: '#639922', fontFamily: 'var(--font-mono)' }}>+{d.wins}</td>
-                <td style={{ padding: '9px 12px', color: d.losses > 0 ? '#E24B4A' : 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
-                  {d.losses > 0 ? `-${d.losses}` : '0'}
+                <td style={{ padding: '9px 12px', fontFamily: 'var(--font-mono)' }}>{d.looAcc}%</td>
+                <td style={{ padding: '9px 12px', fontFamily: 'var(--font-mono)', color: d.looDelta > 0 ? '#639922' : d.looDelta < 0 ? '#E24B4A' : 'var(--text3)' }}>
+                  {d.looDelta > 0 ? '+' : ''}{d.looDelta}pp
+                </td>
+                <td style={{ padding: '9px 12px', fontFamily: 'var(--font-mono)' }}>{d.isoAcc}%</td>
+                <td style={{ padding: '9px 12px', color: '#639922', fontFamily: 'var(--font-mono)' }}>+{d.looWins}</td>
+                <td style={{ padding: '9px 12px', color: d.looLosses > 0 ? '#E24B4A' : 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
+                  {d.looLosses > 0 ? `-${d.looLosses}` : '0'}
                 </td>
               </tr>
             ))}

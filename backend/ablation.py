@@ -1,169 +1,193 @@
 """
-QuaSAR Stage Ablation Analysis.
+QuaSAR stage ablation analysis.
 
-Computes the marginal contribution of each QuaSAR stage by evaluating
-progressive stage subsets (depth 1 through 4) on a set of problems.
+For each of the 4 QuaSAR stages (Abstraction, Formalisation, Explanation,
+Answering) we quantify its contribution to mathematical accuracy three ways:
 
-Metrics:
-  accuracy_by_depth     — accuracy at each depth (1, 2, 3, 4)
-  marginal_contribution — Acc(depth_n) - Acc(depth_n-1)
-  stage_necessity       — for problems where full QuaSAR is correct,
-                          what is the minimum depth that also gets it right?
-  attribution_matrix    — problem × depth correctness grid (for heatmaps)
+  1. Cumulative (progressive depth)  — accuracy as stages are added in order
+                                        1, 1-2, 1-3, 1-4. The marginal
+                                        contribution Δ_k = Acc(1..k) - Acc(1..k-1)
+                                        is what the original QuaSAR paper calls
+                                        "depth attribution".
+
+  2. Leave-one-out (LOO)              — Acc(full) − Acc(full \ {Sk}). This is
+                                        the most direct per-stage contribution
+                                        signal: how much does removing stage k
+                                        hurt the fully assembled pipeline?
+
+  3. Isolated (single stage)          — accuracy when only stage k is active.
+                                        Shows what a stage can deliver on its own.
+
+All three families share the same problem set, so deltas are comparable.
 """
 from __future__ import annotations
 
 from typing import Any
 
+# ── Identifiers kept in sync with methods.py ──────────────────────────────────
 
-DEPTH_IDS = ["quasar_1", "quasar_2", "quasar_3", "quasar"]
-DEPTH_LABELS = {
-    "quasar_1": "Stage 1 — Abstraction",
-    "quasar_2": "Stages 1-2 — + Formalisation",
-    "quasar_3": "Stages 1-3 — + Explanation",
-    "quasar":   "Stages 1-4 — Full QuaSAR",
+STAGE_NAMES   = ["Abstraction", "Formalisation", "Explanation", "Answering"]
+STAGE_COLORS  = ["#7F77DD", "#378ADD", "#639922", "#BA7517"]
+
+CUMULATIVE_IDS = ["quasar_1", "quasar_2", "quasar_3", "quasar"]
+LOO_IDS        = ["quasar_loo_1", "quasar_loo_2", "quasar_loo_3", "quasar_loo_4"]
+ISOLATED_IDS   = ["quasar_iso_1", "quasar_iso_2", "quasar_iso_3", "quasar_iso_4"]
+FULL_ID        = "quasar"
+
+CUMULATIVE_LABELS = {
+    "quasar_1": "S1",
+    "quasar_2": "S1-S2",
+    "quasar_3": "S1-S3",
+    "quasar":   "S1-S4 (full)",
 }
-STAGE_NAMES = ["Abstraction", "Formalisation", "Explanation", "Answering"]
-STAGE_COLORS = ["#7F77DD", "#378ADD", "#639922", "#BA7517"]
+LOO_LABELS = {
+    "quasar_loo_1": "¬S1 (no Abstraction)",
+    "quasar_loo_2": "¬S2 (no Formalisation)",
+    "quasar_loo_3": "¬S3 (no Explanation)",
+    "quasar_loo_4": "¬S4 (no Answering)",
+}
+ISOLATED_LABELS = {
+    "quasar_iso_1": "S1 only",
+    "quasar_iso_2": "S2 only",
+    "quasar_iso_3": "S3 only",
+    "quasar_iso_4": "S4 only",
+}
 
+
+def ablation_method_ids() -> list[str]:
+    """Every method id the ablation runner must evaluate."""
+    return [*CUMULATIVE_IDS, *LOO_IDS, *ISOLATED_IDS]
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _correct_flags(problems: list[dict[str, Any]], method_id: str) -> list[bool]:
+    return [
+        bool(p.get("methods", {}).get(method_id, {}).get("correct", False))
+        for p in problems
+    ]
+
+
+def _accuracy(flags: list[bool]) -> float:
+    return round(sum(flags) / len(flags), 4) if flags else 0.0
+
+
+# ── Main analysis ─────────────────────────────────────────────────────────────
 
 def compute_ablation_analysis(
     problems: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """
-    Analyse ablation results from a batch run.
-
-    problems: list of problem dicts from a batch result, each having
-              a 'methods' key with correctness per method_id.
-    Returns a rich analysis dict suitable for the frontend.
-    """
     n = len(problems)
     if n == 0:
         return {}
 
-    # ── Accuracy by depth ──────────────────────────────────────────────────
-    accuracy_by_depth: dict[str, float] = {}
-    for d in DEPTH_IDS:
-        correct = sum(
-            int(p["methods"].get(d, {}).get("correct", False))
-            for p in problems
-        )
-        accuracy_by_depth[d] = round(correct / n, 4) if n else 0.0
+    # Correctness per method (parallel lists over problems)
+    correctness: dict[str, list[bool]] = {
+        m: _correct_flags(problems, m)
+        for m in ablation_method_ids()
+    }
+    full_correct = correctness[FULL_ID]
+    full_acc = _accuracy(full_correct)
 
-    # ── Marginal contribution ──────────────────────────────────────────────
-    marginal: dict[str, float] = {}
-    prev_acc = 0.0
-    for d in DEPTH_IDS:
-        acc = accuracy_by_depth[d]
-        marginal[d] = round(acc - prev_acc, 4)
-        prev_acc = acc
+    # ── 1. Cumulative ──────────────────────────────────────────────────────
+    cumulative_accuracy = {m: _accuracy(correctness[m]) for m in CUMULATIVE_IDS}
+    cumulative_marginal: dict[str, float] = {}
+    prev = 0.0
+    for m in CUMULATIVE_IDS:
+        cumulative_marginal[m] = round(cumulative_accuracy[m] - prev, 4)
+        prev = cumulative_accuracy[m]
 
-    # ── Attribution matrix (problem × depth) ──────────────────────────────
+    # ── 2. Leave-one-out ───────────────────────────────────────────────────
+    # contribution_of(Sk) = Acc(full) - Acc(full \ Sk)
+    loo_accuracy:      dict[str, float] = {}
+    loo_contribution:  dict[str, float] = {}
+    loo_wins:          dict[str, int]   = {}   # full correct, LOO wrong
+    loo_losses:        dict[str, int]   = {}   # LOO correct, full wrong
+    for k, loo_id in enumerate(LOO_IDS, start=1):
+        loo_flags = correctness[loo_id]
+        acc = _accuracy(loo_flags)
+        loo_accuracy[loo_id] = acc
+        loo_contribution[loo_id] = round(full_acc - acc, 4)
+        loo_wins[loo_id]   = sum(int(f and not l) for f, l in zip(full_correct, loo_flags))
+        loo_losses[loo_id] = sum(int(l and not f) for f, l in zip(full_correct, loo_flags))
+
+    # ── 3. Isolated ────────────────────────────────────────────────────────
+    isolated_accuracy: dict[str, float] = {
+        m: _accuracy(correctness[m]) for m in ISOLATED_IDS
+    }
+
+    # ── Per-stage summary (canonical per-stage contribution view) ─────────
+    per_stage: list[dict[str, Any]] = []
+    for k in range(1, 5):
+        cum_id = CUMULATIVE_IDS[k - 1]
+        loo_id = LOO_IDS[k - 1]
+        iso_id = ISOLATED_IDS[k - 1]
+        per_stage.append({
+            "stage":                 k,
+            "name":                  STAGE_NAMES[k - 1],
+            "color":                 STAGE_COLORS[k - 1],
+            "cumulative_accuracy":   cumulative_accuracy[cum_id],
+            "cumulative_marginal":   cumulative_marginal[cum_id],
+            "loo_accuracy":          loo_accuracy[loo_id],
+            "loo_contribution":      loo_contribution[loo_id],
+            "loo_wins":              loo_wins[loo_id],
+            "loo_losses":            loo_losses[loo_id],
+            "isolated_accuracy":     isolated_accuracy[iso_id],
+        })
+
+    # ── Attribution matrix (problem × method correctness grid) ─────────────
     matrix: list[dict[str, Any]] = []
     for p in problems:
         row: dict[str, Any] = {
             "problem_id": p["problem"].get("id"),
-            "question_snippet": p["problem"].get("question", "")[:60] + "…",
+            "question_snippet": (p["problem"].get("question") or "")[:60] + "…",
         }
-        for d in DEPTH_IDS:
-            row[d] = bool(p["methods"].get(d, {}).get("correct", False))
+        for m in ablation_method_ids():
+            row[m] = bool(p.get("methods", {}).get(m, {}).get("correct", False))
         matrix.append(row)
 
-    # ── Stage necessity ────────────────────────────────────────────────────
-    # For problems where full QuaSAR is correct, find the minimum depth
-    # that also gets it right. If depth 1 already gets it, stage 1 is
-    # sufficient; otherwise stage 2 adds value, etc.
-    necessity_counts = {d: 0 for d in DEPTH_IDS}
-    full_correct_count = 0
-
-    for p in problems:
-        if not p["methods"].get("quasar", {}).get("correct", False):
-            continue
-        full_correct_count += 1
-        for d in DEPTH_IDS:
-            if p["methods"].get(d, {}).get("correct", False):
-                necessity_counts[d] += 1
-                break  # minimum depth found
-
-    necessity: dict[str, float] = {
-        d: round(necessity_counts[d] / full_correct_count, 4)
-        if full_correct_count else 0.0
-        for d in DEPTH_IDS
-    }
-
-    # ── Per-stage win/lose analysis ────────────────────────────────────────
-    # A stage "wins" a problem if adding that stage flips an incorrect
-    # answer to correct. A stage "loses" if removing it flips correct to wrong.
-    stage_wins: dict[str, int] = {}
-    stage_losses: dict[str, int] = {}
-
-    depth_list = DEPTH_IDS  # ordered by depth
-    for i, d in enumerate(depth_list):
-        wins = 0
-        losses = 0
-        prev_d = depth_list[i - 1] if i > 0 else None
-        for p in problems:
-            curr_correct = bool(p["methods"].get(d, {}).get("correct", False))
-            prev_correct = bool(
-                p["methods"].get(prev_d, {}).get("correct", False)
-            ) if prev_d else False
-
-            if curr_correct and not prev_correct:
-                wins += 1
-            elif not curr_correct and prev_correct:
-                losses += 1
-
-        stage_wins[d]   = wins
-        stage_losses[d] = losses
-
     return {
-        "n_problems": n,
-        "accuracy_by_depth": accuracy_by_depth,
-        "marginal_contribution": marginal,
-        "attribution_matrix": matrix,
-        "stage_necessity": necessity,
-        "stage_wins": stage_wins,
-        "stage_losses": stage_losses,
-        "depth_labels": DEPTH_LABELS,
-        "stage_names": STAGE_NAMES,
-        "stage_colors": STAGE_COLORS,
-        "full_quasar_correct": full_correct_count,
+        "n_problems":            n,
+        "full_accuracy":         full_acc,
+        "per_stage":             per_stage,
+        "cumulative_accuracy":   cumulative_accuracy,
+        "cumulative_marginal":   cumulative_marginal,
+        "loo_accuracy":          loo_accuracy,
+        "loo_contribution":      loo_contribution,
+        "loo_wins":              loo_wins,
+        "loo_losses":            loo_losses,
+        "isolated_accuracy":     isolated_accuracy,
+        "attribution_matrix":    matrix,
+        "stage_names":           STAGE_NAMES,
+        "stage_colors":          STAGE_COLORS,
+        "cumulative_labels":     CUMULATIVE_LABELS,
+        "loo_labels":            LOO_LABELS,
+        "isolated_labels":       ISOLATED_LABELS,
     }
 
 
 def compute_sap_delta(
     problems: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """
-    Compute the delta between QuaSAR-SAP and full QuaSAR.
-    SAP is our original contribution — this shows whether system-level
-    quasi-symbolic priming outperforms user-level instruction alone.
-    """
+    """Compare QuaSAR-SAP against full QuaSAR."""
     n = len(problems)
     if n == 0:
         return {}
 
-    quasar_correct = [
-        bool(p["methods"].get("quasar", {}).get("correct", False))
-        for p in problems
-    ]
-    sap_correct = [
-        bool(p["methods"].get("quasar_sap", {}).get("correct", False))
-        for p in problems
-    ]
+    quasar_correct = _correct_flags(problems, "quasar")
+    sap_correct    = _correct_flags(problems, "quasar_sap")
 
     quasar_acc = sum(quasar_correct) / n
     sap_acc    = sum(sap_correct) / n
 
-    # Problems where SAP wins over QuaSAR and vice versa
     sap_wins   = sum(int(s and not q) for s, q in zip(sap_correct, quasar_correct))
     sap_losses = sum(int(q and not s) for s, q in zip(sap_correct, quasar_correct))
 
     return {
-        "quasar_accuracy":  round(quasar_acc, 4),
-        "sap_accuracy":     round(sap_acc, 4),
-        "delta":            round(sap_acc - quasar_acc, 4),
-        "sap_wins":         sap_wins,
-        "sap_losses":       sap_losses,
-        "n_problems":       n,
+        "quasar_accuracy": round(quasar_acc, 4),
+        "sap_accuracy":    round(sap_acc, 4),
+        "delta":           round(sap_acc - quasar_acc, 4),
+        "sap_wins":        sap_wins,
+        "sap_losses":      sap_losses,
+        "n_problems":      n,
     }

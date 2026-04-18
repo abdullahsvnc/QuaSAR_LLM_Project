@@ -42,20 +42,44 @@ from evaluator import (
 )
 from gsm8k_loader import load_problems
 from adversarial import generate_all_variants
-from ablation import compute_ablation_analysis, compute_sap_delta
+from ablation import (
+    compute_ablation_analysis,
+    compute_sap_delta,
+    ablation_method_ids,
+)
 import cache as response_cache
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-MODEL      = os.getenv("MODEL",      "gemini-2.5-flash")
-FAST_MODEL = os.getenv("FAST_MODEL", "gemini-2.5-flash-lite")
+MODEL      = os.getenv("MODEL",      "gpt-4o-mini")
+FAST_MODEL = os.getenv("FAST_MODEL", "gpt-4o-mini")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
-client = AsyncOpenAI(
-    api_key=GEMINI_API_KEY,
-    base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-)
+_GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai/"
+
+_gemini_client = AsyncOpenAI(api_key=GEMINI_API_KEY or "missing", base_url=_GEMINI_BASE) if GEMINI_API_KEY else None
+_openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+
+
+def _provider_for(model_name: str) -> str:
+    m = model_name.lower()
+    if m.startswith("gemini"):
+        return "gemini"
+    # gpt-*, o*, chatgpt-* all live on the OpenAI endpoint
+    return "openai"
+
+
+def _client_for(model_name: str) -> AsyncOpenAI:
+    provider = _provider_for(model_name)
+    if provider == "gemini":
+        if _gemini_client is None:
+            raise HTTPException(500, "GEMINI_API_KEY is not set in backend/.env")
+        return _gemini_client
+    if _openai_client is None:
+        raise HTTPException(500, "OPENAI_API_KEY is not set in backend/.env")
+    return _openai_client
 
 RESULTS_DIR = Path("./results")
 RESULTS_DIR.mkdir(exist_ok=True)
@@ -102,10 +126,27 @@ class AblationRequest(BaseModel):
 
 # ── Core inference ────────────────────────────────────────────────────────────
 
-async def run_single(method_id: str, problem: str, mdl: str) -> dict[str, Any]:
-    """Run one method on one problem. Checks cache first."""
+# QuaSAR prompts enumerate 1–4 stage headers so they need more output budget
+# than a plain standard/CoT prompt. Standard baselines keep a smaller budget.
+_MAX_TOKENS_QUASAR   = 1400
+_MAX_TOKENS_BASELINE = 700
 
-    # Cache hit
+_RETRY_ATTEMPTS = 4
+_RETRY_BASE_DELAY = 1.5  # seconds; doubles each attempt
+
+# Cap the number of in-flight Gemini requests regardless of which endpoint
+# dispatched them. Free-tier keys have aggressive per-minute quotas and this
+# is the simplest way to stay under them without coupling endpoints.
+_GLOBAL_API_SEM = asyncio.Semaphore(4)
+
+
+def _max_tokens_for(method_id: str) -> int:
+    return _MAX_TOKENS_QUASAR if method_id.startswith("quasar") else _MAX_TOKENS_BASELINE
+
+
+async def run_single(method_id: str, problem: str, mdl: str) -> dict[str, Any]:
+    """Run one method on one problem. Checks cache first; retries on transient errors."""
+
     cached = response_cache.get(method_id, problem, mdl)
     if cached:
         return {**cached, "cache_hit": True}
@@ -113,20 +154,40 @@ async def run_single(method_id: str, problem: str, mdl: str) -> dict[str, Any]:
     messages = build_messages(method_id, problem)
     t0 = time.perf_counter()
 
-    resp = await client.chat.completions.create(
-        model=mdl,
-        messages=messages,  # type: ignore[arg-type]
-        max_tokens=700,
-        temperature=0,
-    )
+    client = _client_for(mdl)
+
+    last_err: BaseException | None = None
+    resp = None
+    for attempt in range(_RETRY_ATTEMPTS):
+        try:
+            async with _GLOBAL_API_SEM:
+                resp = await client.chat.completions.create(
+                    model=mdl,
+                    messages=messages,  # type: ignore[arg-type]
+                    max_tokens=_max_tokens_for(method_id),
+                    temperature=0,
+                )
+            break
+        except Exception as e:  # rate-limit, 5xx, transient network
+            last_err = e
+            msg = str(e).lower()
+            transient = (
+                "rate" in msg or "quota" in msg or "429" in msg
+                or "timeout" in msg or "503" in msg or "unavailable" in msg
+                or "overload" in msg or "exhaust" in msg
+            )
+            if attempt == _RETRY_ATTEMPTS - 1 or not transient:
+                raise
+            await asyncio.sleep(_RETRY_BASE_DELAY * (2 ** attempt))
+    assert resp is not None, last_err
 
     elapsed = round((time.perf_counter() - t0) * 1000)
     content = resp.choices[0].message.content or ""
     text = content.strip()
 
     extracted = extract_answer(text)
-    if extracted is None:
-        extracted = await extract_answer_via_llm(text, client, FAST_MODEL)
+    if extracted is None and text:
+        extracted = await extract_answer_via_llm(text, _client_for(FAST_MODEL), FAST_MODEL)
 
     result: dict[str, Any] = {
         "method_id": method_id,
@@ -216,15 +277,19 @@ async def batch_evaluate(req: BatchRequest) -> dict[str, Any]:
     except Exception as e:
         raise HTTPException(500, f"Failed to load GSM8K: {e}")
 
-    sem = asyncio.Semaphore(5)
+    sem = asyncio.Semaphore(3)
 
     async def run_problem(prob: dict[str, Any]) -> dict[str, Any]:
         async with sem:
             tasks = [run_single(m, prob["question"], mdl) for m in req.methods]
             method_results = await asyncio.gather(*tasks, return_exceptions=True)
             out: dict[str, Any] = {"problem": prob, "methods": {}}
-            for r in method_results:
+            for mid, r in zip(req.methods, method_results):
                 if isinstance(r, BaseException):
+                    out["methods"][mid] = {
+                        "method_id": mid, "error": str(r),
+                        "text": None, "extracted_answer": None, "correct": False,
+                    }
                     continue
                 rd = dict(r)
                 rd["correct"] = is_correct(rd.get("extracted_answer"), prob["numeric_answer"])
@@ -284,7 +349,7 @@ async def adversarial_evaluate(req: AdversarialRequest) -> dict[str, Any]:
         for v in variants
     ]
 
-    sem = asyncio.Semaphore(4)
+    sem = asyncio.Semaphore(3)
 
     async def eval_problem(prob_meta: dict[str, Any]) -> dict[str, Any]:
         async with sem:
@@ -297,8 +362,12 @@ async def adversarial_evaluate(req: AdversarialRequest) -> dict[str, Any]:
                 "ground_truth": prob_meta["answer"],
                 "methods": {},
             }
-            for r in method_results:
+            for mid, r in zip(req.methods, method_results):
                 if isinstance(r, BaseException):
+                    out["methods"][mid] = {
+                        "method_id": mid, "error": str(r),
+                        "text": None, "extracted_answer": None, "correct": False,
+                    }
                     continue
                 rd = dict(r)
                 rd["correct"] = is_correct(rd.get("extracted_answer"), prob_meta["answer"])
@@ -318,10 +387,11 @@ async def adversarial_evaluate(req: AdversarialRequest) -> dict[str, Any]:
 async def run_ablation(req: AblationRequest) -> dict[str, Any]:
     """
     Run QuaSAR stage ablation analysis on N GSM8K problems.
-    Evaluates quasar_1 through quasar_4 (and optionally quasar_sap).
+    Evaluates cumulative (quasar_1..quasar), leave-one-out (quasar_loo_1..4)
+    and isolated (quasar_iso_1..4) stage subsets — optionally + quasar_sap.
     """
     mdl = req.model or MODEL
-    ablation_methods = ["quasar_1", "quasar_2", "quasar_3", "quasar"]
+    ablation_methods = list(ablation_method_ids())
     if req.include_sap:
         ablation_methods.append("quasar_sap")
 
@@ -330,19 +400,29 @@ async def run_ablation(req: AblationRequest) -> dict[str, Any]:
     except Exception as e:
         raise HTTPException(500, f"Failed to load GSM8K: {e}")
 
-    sem = asyncio.Semaphore(4)
+    # Ablation runs ~12–13 methods per problem — keep concurrency modest so
+    # Gemini's free-tier rate limit doesn't start rejecting calls.
+    sem = asyncio.Semaphore(2)
 
     async def run_problem(prob: dict[str, Any]) -> dict[str, Any]:
         async with sem:
             tasks = [run_single(m, prob["question"], mdl) for m in ablation_methods]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             out: dict[str, Any] = {"problem": prob, "methods": {}}
-            for r in results:
+            errors: dict[str, str] = {}
+            for mid, r in zip(ablation_methods, results):
                 if isinstance(r, BaseException):
+                    errors[mid] = str(r)
+                    out["methods"][mid] = {
+                        "method_id": mid, "error": str(r),
+                        "text": None, "extracted_answer": None, "correct": False,
+                    }
                     continue
                 rd = dict(r)
                 rd["correct"] = is_correct(rd.get("extracted_answer"), prob["numeric_answer"])
                 out["methods"][rd["method_id"]] = rd
+            if errors:
+                out["errors"] = errors
             return out
 
     all_results = await asyncio.gather(*[run_problem(p) for p in problems])
@@ -382,7 +462,13 @@ def list_results() -> dict[str, list[dict[str, Any]]]:
                 entry["config"] = data.get("config")
                 entry["analysis_summary"] = {
                     k: v for k, v in data.get("analysis", {}).items()
-                    if k in ("accuracy_by_depth", "marginal_contribution")
+                    if k in (
+                        "cumulative_accuracy",
+                        "cumulative_marginal",
+                        "loo_contribution",
+                        "isolated_accuracy",
+                        "full_accuracy",
+                    )
                 }
             else:
                 entry["config"]   = data.get("config")

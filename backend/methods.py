@@ -1,22 +1,46 @@
 """
 Prompting strategies for the QuaSAR ablation study.
 
-Core methods:
+Baselines:
   standard      — direct question, no strategy
   zeroshotcot   — Kojima et al. 2022 (NeurIPS)
   cot           — Wei et al. 2022 (NeurIPS), 6-shot exemplars
   quasar        — Ranaldi, Valentino & Freitas 2025 (ACL), full 4-stage
 
-QuaSAR ablation depths (original contribution):
-  quasar_1 — Stage 1 only (Abstraction)
-  quasar_2 — Stages 1-2  (+ Formalisation)
-  quasar_3 — Stages 1-3  (+ Explanation)
-  quasar   — Full 4-stage (alias of depth 4)
+QuaSAR 4 stages:
+  S1 ABSTRACTION    — strip surface content, keep logical skeleton
+  S2 FORMALISATION  — map to symbolic / algebraic notation
+  S3 EXPLANATION    — derive the solution through formal manipulation
+  S4 ANSWERING      — bind concrete values, state and verify the answer
+
+Ablation families (original contribution of this project — every stage
+subset is evaluated so we can attribute the marginal gain of each stage):
+
+  Cumulative (progressive depth):
+    quasar_1     — {S1}
+    quasar_2     — {S1, S2}
+    quasar_3     — {S1, S2, S3}
+    quasar       — {S1, S2, S3, S4}   (full)
+
+  Leave-one-out (LOO — full minus stage k):
+    quasar_loo_1 — {S2, S3, S4}       (drop Abstraction)
+    quasar_loo_2 — {S1, S3, S4}       (drop Formalisation)
+    quasar_loo_3 — {S1, S2, S4}       (drop Explanation)
+    quasar_loo_4 — {S1, S2, S3}       (drop Answering)
+
+  Isolated (single stage only):
+    quasar_iso_1 — {S1}
+    quasar_iso_2 — {S2}
+    quasar_iso_3 — {S3}
+    quasar_iso_4 — {S4}
 
 Original contribution — Structured Activation Priming (SAP):
-  quasar_sap — Quasi-symbolic structure injected at system level as a
-               persistent activation prior, approximating test-time
-               activation steering (rsLoRA proxy without fine-tuning).
+  quasar_sap   — the quasi-symbolic structure is injected at system level
+                 as a persistent activation prior (rsLoRA proxy without
+                 fine-tuning).
+
+Every prompt — even Stage-1-only — ends with a mandatory final-answer
+instruction, so answer extraction remains well-defined across all subsets.
 """
 from __future__ import annotations
 
@@ -50,6 +74,45 @@ How many computers are now in the server room?
 A: Monday through Thursday is 4 days. 4 x 5 = 20 computers added. 9 + 20 = 29.
 #### 29"""
 
+# ── Stage catalogue ────────────────────────────────────────────────────────────
+
+STAGE_NAMES = {
+    1: "ABSTRACTION",
+    2: "FORMALISATION",
+    3: "EXPLANATION",
+    4: "ANSWERING",
+}
+
+STAGE_INSTRUCTIONS: dict[int, str] = {
+    1: (
+        "[STAGE 1 — ABSTRACTION]\n"
+        "Identify the abstract logical structure of the problem. "
+        "Replace specific numeric values and named entities with generic variables "
+        "(e.g. x, n, A, B). Name the type of mathematical operation(s) involved."
+    ),
+    2: (
+        "[STAGE 2 — FORMALISATION]\n"
+        "Express the problem in formal mathematical notation. Define each variable "
+        "explicitly and write the equation(s) that encode the problem."
+    ),
+    3: (
+        "[STAGE 3 — EXPLANATION]\n"
+        "Solve the equation(s) step by step. Justify each arithmetic or algebraic "
+        "transformation, working entirely in symbolic form where possible."
+    ),
+    4: (
+        "[STAGE 4 — ANSWERING]\n"
+        "Substitute the original concrete values back into the symbolic solution. "
+        "State the final answer and verify it against the problem statement."
+    ),
+}
+
+_FINAL_ANSWER_LINE = (
+    "After completing the requested stage(s), ALWAYS finish your response with the "
+    "final numeric answer on its own line prefixed with '#### '. This rule is "
+    "absolute — it applies even if a stage instruction tells you to defer computation."
+)
+
 # ── SAP system prompt (our original contribution) ─────────────────────────────
 
 _SAP_SYSTEM = """\
@@ -72,40 +135,56 @@ prefixed with '#### '."""
 
 # ── QuaSAR system prompt ───────────────────────────────────────────────────────
 
-_QUASAR_SYSTEM = """\
-You are a mathematical reasoning system implementing the QuaSAR framework \
-(Quasi-Symbolic Abstract Reasoning — Ranaldi, Valentino & Freitas, ACL 2025). \
-Structure your response using exactly the stage headers shown. \
-At the very end of Stage 4, write the final numeric answer on its own line prefixed with '#### '."""
+_QUASAR_SYSTEM = (
+    "You are a mathematical reasoning system implementing the QuaSAR framework "
+    "(Quasi-Symbolic Abstract Reasoning — Ranaldi, Valentino & Freitas, ACL 2025). "
+    "Perform exactly the stages requested by the user, in the order requested, using "
+    "the stage headers shown. "
+    + _FINAL_ANSWER_LINE
+)
 
 
-def _quasar_user(problem: str, max_stage: int = 4) -> str:
-    stage_instructions = [
-        (
-            "[STAGE 1 — ABSTRACTION]\n"
-            "Identify the abstract logical structure. Replace specific numeric values and "
-            "named entities with generic variables (e.g. x, n, A, B). Identify the "
-            "mathematical operation type. Do NOT compute yet."
-        ),
-        (
-            "[STAGE 2 — FORMALISATION]\n"
-            "Express the abstracted problem using formal mathematical notation. "
-            "Define all variables explicitly. Write the equation(s) to be solved."
-        ),
-        (
-            "[STAGE 3 — EXPLANATION]\n"
-            "Solve step by step using the formal notation. "
-            "Justify each arithmetic or algebraic transformation."
-        ),
-        (
-            "[STAGE 4 — ANSWERING]\n"
-            "Substitute back the original concrete values. "
-            "State the final answer clearly and verify it against the problem statement."
-        ),
-    ]
-    header = f'Solve this problem using the QuaSAR {max_stage}-stage framework:\n\n"{problem}"\n\n'
-    body = "\n\n".join(stage_instructions[:max_stage])
-    return header + body
+def _quasar_user(problem: str, stages: tuple[int, ...]) -> str:
+    """Build the user prompt for any non-empty ordered subset of the 4 stages."""
+    stages = tuple(sorted(set(stages)))
+    if not stages or not all(1 <= s <= 4 for s in stages):
+        raise ValueError(f"stages must be a non-empty subset of 1..4, got {stages}")
+
+    subset_repr = "{" + ", ".join(f"S{s}" for s in stages) + "}"
+    header = (
+        f'Solve the problem below using the QuaSAR pipeline restricted to the '
+        f'stage subset {subset_repr}. Execute only the listed stages; do not '
+        f'perform the others explicitly.\n\n'
+        f'PROBLEM:\n"{problem}"\n\n'
+    )
+    body = "\n\n".join(STAGE_INSTRUCTIONS[s] for s in stages)
+    footer = (
+        "\n\nREMINDER: regardless of which stages were requested, end your response "
+        "with the final numeric answer on its own line prefixed with '#### '."
+    )
+    return header + body + footer
+
+
+def _quasar_method(
+    method_id: str,
+    stages: tuple[int, ...],
+    name: str,
+    badge: str,
+    color: str,
+    group: str,
+    description: str,
+) -> dict[str, Any]:
+    return {
+        "id":          method_id,
+        "name":        name,
+        "badge":       badge,
+        "color":       color,
+        "group":       group,
+        "description": description,
+        "stages":      list(stages),
+        "system":      _QUASAR_SYSTEM,
+        "build_user":  lambda p, s=stages: _quasar_user(p, s),
+    }
 
 
 # ── Method registry ────────────────────────────────────────────────────────────
@@ -156,49 +235,71 @@ METHODS: dict[str, dict[str, Any]] = {
         "build_user": lambda p: f"{_COT_EXEMPLARS}\n\nQ: {p}\nA:",
     },
 
-    "quasar": {
-        "id": "quasar",
-        "name": "QuaSAR",
-        "badge": "QuaSAR",
-        "color": "#BA7517",
-        "group": "quasar",
-        "description": "Ranaldi et al., ACL 2025 · Full 4-stage quasi-symbolic pipeline",
-        "system": _QUASAR_SYSTEM,
-        "build_user": lambda p: _quasar_user(p, 4),
-    },
+    # ── Cumulative depth (progressive stage inclusion) ──
+    "quasar_1": _quasar_method(
+        "quasar_1", (1,),
+        "QuaSAR [S1]", "QS-1", "#7F77DD", "cumulative",
+        "Cumulative depth 1 — {Abstraction}",
+    ),
+    "quasar_2": _quasar_method(
+        "quasar_2", (1, 2),
+        "QuaSAR [S1-S2]", "QS-2", "#378ADD", "cumulative",
+        "Cumulative depth 2 — {Abstraction, Formalisation}",
+    ),
+    "quasar_3": _quasar_method(
+        "quasar_3", (1, 2, 3),
+        "QuaSAR [S1-S3]", "QS-3", "#639922", "cumulative",
+        "Cumulative depth 3 — {Abstraction, Formalisation, Explanation}",
+    ),
+    "quasar": _quasar_method(
+        "quasar", (1, 2, 3, 4),
+        "QuaSAR", "QuaSAR", "#BA7517", "quasar",
+        "Ranaldi et al., ACL 2025 · Full 4-stage quasi-symbolic pipeline",
+    ),
 
-    "quasar_1": {
-        "id": "quasar_1",
-        "name": "QuaSAR [1]",
-        "badge": "QS-1",
-        "color": "#7F77DD",
-        "group": "ablation",
-        "description": "Ablation depth 1 — Stage 1 (Abstraction) only",
-        "system": _QUASAR_SYSTEM,
-        "build_user": lambda p: _quasar_user(p, 1),
-    },
+    # ── Leave-one-out (full \ {Sk}) ──
+    "quasar_loo_1": _quasar_method(
+        "quasar_loo_1", (2, 3, 4),
+        "QuaSAR ¬S1", "¬S1", "#9A8AEA", "loo",
+        "Leave-one-out — drop Abstraction (S2, S3, S4)",
+    ),
+    "quasar_loo_2": _quasar_method(
+        "quasar_loo_2", (1, 3, 4),
+        "QuaSAR ¬S2", "¬S2", "#5FA0E8", "loo",
+        "Leave-one-out — drop Formalisation (S1, S3, S4)",
+    ),
+    "quasar_loo_3": _quasar_method(
+        "quasar_loo_3", (1, 2, 4),
+        "QuaSAR ¬S3", "¬S3", "#86B536", "loo",
+        "Leave-one-out — drop Explanation (S1, S2, S4)",
+    ),
+    "quasar_loo_4": _quasar_method(
+        "quasar_loo_4", (1, 2, 3),
+        "QuaSAR ¬S4", "¬S4", "#D49438", "loo",
+        "Leave-one-out — drop Answering (S1, S2, S3)",
+    ),
 
-    "quasar_2": {
-        "id": "quasar_2",
-        "name": "QuaSAR [1-2]",
-        "badge": "QS-2",
-        "color": "#378ADD",
-        "group": "ablation",
-        "description": "Ablation depth 2 — Stages 1-2 (+ Formalisation)",
-        "system": _QUASAR_SYSTEM,
-        "build_user": lambda p: _quasar_user(p, 2),
-    },
-
-    "quasar_3": {
-        "id": "quasar_3",
-        "name": "QuaSAR [1-3]",
-        "badge": "QS-3",
-        "color": "#639922",
-        "group": "ablation",
-        "description": "Ablation depth 3 — Stages 1-3 (+ Explanation)",
-        "system": _QUASAR_SYSTEM,
-        "build_user": lambda p: _quasar_user(p, 3),
-    },
+    # ── Single-stage isolation ──
+    "quasar_iso_1": _quasar_method(
+        "quasar_iso_1", (1,),
+        "QuaSAR {S1}", "S1", "#7F77DD", "isolated",
+        "Isolated — Abstraction only",
+    ),
+    "quasar_iso_2": _quasar_method(
+        "quasar_iso_2", (2,),
+        "QuaSAR {S2}", "S2", "#378ADD", "isolated",
+        "Isolated — Formalisation only",
+    ),
+    "quasar_iso_3": _quasar_method(
+        "quasar_iso_3", (3,),
+        "QuaSAR {S3}", "S3", "#639922", "isolated",
+        "Isolated — Explanation only",
+    ),
+    "quasar_iso_4": _quasar_method(
+        "quasar_iso_4", (4,),
+        "QuaSAR {S4}", "S4", "#BA7517", "isolated",
+        "Isolated — Answering only",
+    ),
 
     "quasar_sap": {
         "id": "quasar_sap",
@@ -207,14 +308,18 @@ METHODS: dict[str, dict[str, Any]] = {
         "color": "#D85A30",
         "group": "contribution",
         "description": "Original contribution — Structured Activation Priming (system-level quasi-symbolic prior)",
+        "stages": [1, 2, 3, 4],
         "system": _SAP_SYSTEM,
-        "build_user": lambda p: _quasar_user(p, 4),
+        "build_user": lambda p: _quasar_user(p, (1, 2, 3, 4)),
     },
 }
 
-# Canonical orders
+# Canonical orderings
 COMPARE_ORDER = ["standard", "zeroshotcot", "cot", "quasar"]
-ABLATION_ORDER = ["standard", "zeroshotcot", "cot", "quasar_1", "quasar_2", "quasar_3", "quasar", "quasar_sap"]
+CUMULATIVE_ORDER = ["quasar_1", "quasar_2", "quasar_3", "quasar"]
+LOO_ORDER        = ["quasar_loo_1", "quasar_loo_2", "quasar_loo_3", "quasar_loo_4"]
+ISOLATED_ORDER   = ["quasar_iso_1", "quasar_iso_2", "quasar_iso_3", "quasar_iso_4"]
+ABLATION_ORDER   = CUMULATIVE_ORDER + LOO_ORDER + ISOLATED_ORDER
 
 
 def get_method(method_id: str) -> dict[str, Any]:
