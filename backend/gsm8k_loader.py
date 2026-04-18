@@ -29,9 +29,12 @@ def _load_dataset(split: str):
     return load_dataset("gsm8k", "main", split=split)
 
 
-def load_problems(split: str = "test", n: int = 50, seed: int = 42) -> list[dict[str, Any]]:
+def load_problems(split: str = "test", n: int = 50, seed: int | None = 42) -> list[dict[str, Any]]:
     """
     Load n problems from GSM8K.
+
+    seed=None → truly random sample every call (for interactive use).
+    seed=<int> → reproducible sample (for batch/ablation experiments).
 
     Returns a list of dicts:
         {
@@ -43,8 +46,8 @@ def load_problems(split: str = "test", n: int = 50, seed: int = 42) -> list[dict
     """
     ds = _load_dataset(split)
     indices = list(range(len(ds)))
-    random.seed(seed)
-    random.shuffle(indices)
+    rng = random.Random(seed)  # Random(None) uses system entropy — truly random
+    rng.shuffle(indices)
     selected = indices[:n]
 
     problems: list[dict[str, Any]] = []

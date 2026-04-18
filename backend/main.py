@@ -220,7 +220,7 @@ def cache_stats() -> dict[str, int]:
 
 
 @app.get("/api/gsm8k/sample")
-def gsm8k_sample(n: int = 5, split: str = "test", seed: int = 42) -> dict[str, Any]:
+def gsm8k_sample(n: int = 5, split: str = "test", seed: int | None = None) -> dict[str, Any]:
     try:
         problems = load_problems(split=split, n=n, seed=seed)
         return {"problems": problems, "total": len(problems)}
