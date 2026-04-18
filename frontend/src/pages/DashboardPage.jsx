@@ -83,7 +83,26 @@ export default function DashboardPage() {
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <h1 style={{ fontSize: 18, fontWeight: 500 }}>Dashboard</h1>
+      </div>
 
+      <div style={{ 
+        background: 'rgba(186,117,23,0.05)', 
+        border: '1px solid rgba(186,117,23,0.15)', 
+        borderRadius: 'var(--radius-lg)', 
+        padding: '12px 16px', 
+        marginBottom: 24,
+        fontSize: 13,
+        lineHeight: 1.6,
+        color: 'var(--text2)'
+      }}>
+        <strong style={{ color: '#BA7517' }}>Welcome to the QuaSAR Analytics Hub.</strong> This page aggregates all your past experiments. 
+        You can select any previous run to inspect detailed reasoning traces, accuracy metrics, 
+        and statistical significance tests. Use this to track improvements and identify 
+        where the QuaSAR pipeline excels or requires refinement.
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+        <span className="label" style={{ whiteSpace: 'nowrap' }}>Select Experiment:</span>
         <select
           value={selected || ''}
           onChange={e => setSelected(e.target.value)}
@@ -233,7 +252,9 @@ function BatchDetail({ detail }) {
             <XAxis dataKey="name" tick={{ fill: DARK_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis domain={[0, 100]} unit="%" tick={{ fill: DARK_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
             <Tooltip
-              contentStyle={{ background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 8, color: 'var(--text)', fontSize: 12 }}
+              contentStyle={{ background: '#222', border: '1px solid var(--border2)', borderRadius: 8, fontSize: 12 }}
+              itemStyle={{ color: '#fff' }}
+              labelStyle={{ color: '#fff', fontWeight: 500, marginBottom: 4 }}
               formatter={v => [`${v}%`, 'Accuracy']}
             />
             <Bar dataKey="accuracy" radius={[4, 4, 0, 0]}>
@@ -291,7 +312,9 @@ function AblationDetail({ detail }) {
             <XAxis dataKey="name" tick={{ fill: DARK_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis domain={[0, 100]} unit="%" tick={{ fill: DARK_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
             <Tooltip
-              contentStyle={{ background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 8, color: 'var(--text)', fontSize: 12 }}
+              contentStyle={{ background: '#222', border: '1px solid var(--border2)', borderRadius: 8, fontSize: 12 }}
+              itemStyle={{ color: '#fff' }}
+              labelStyle={{ color: '#fff', fontWeight: 500, marginBottom: 4 }}
               formatter={v => [`${v}%`, 'Cumulative acc']}
             />
             <Bar dataKey="cumAcc" radius={[4, 4, 0, 0]}>
@@ -310,7 +333,9 @@ function AblationDetail({ detail }) {
             <XAxis dataKey="name" tick={{ fill: DARK_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis unit="pp" tick={{ fill: DARK_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
             <Tooltip
-              contentStyle={{ background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 8, color: 'var(--text)', fontSize: 12 }}
+              contentStyle={{ background: '#222', border: '1px solid var(--border2)', borderRadius: 8, fontSize: 12 }}
+              itemStyle={{ color: '#fff' }}
+              labelStyle={{ color: '#fff', fontWeight: 500, marginBottom: 4 }}
               formatter={v => [`${v}pp`, 'LOO Δ']}
             />
             <Bar dataKey="looDelta" radius={[4, 4, 0, 0]}>
@@ -329,7 +354,9 @@ function AblationDetail({ detail }) {
             <XAxis dataKey="name" tick={{ fill: DARK_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis domain={[0, 100]} unit="%" tick={{ fill: DARK_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
             <Tooltip
-              contentStyle={{ background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 8, color: 'var(--text)', fontSize: 12 }}
+              contentStyle={{ background: '#222', border: '1px solid var(--border2)', borderRadius: 8, fontSize: 12 }}
+              itemStyle={{ color: '#fff' }}
+              labelStyle={{ color: '#fff', fontWeight: 500, marginBottom: 4 }}
               formatter={v => [`${v}%`, 'Isolated acc']}
             />
             <Bar dataKey="isoAcc" radius={[4, 4, 0, 0]}>

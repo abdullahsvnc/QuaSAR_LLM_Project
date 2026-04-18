@@ -36,6 +36,21 @@ export default function AblationPage() {
   return (
     <div style={{ maxWidth: 1100 }}>
       <h1 style={{ fontSize: 18, fontWeight: 500, marginBottom: 4 }}>QuaSAR Stage Ablation</h1>
+      <div style={{ 
+        background: 'rgba(186,117,23,0.05)', 
+        border: '1px solid rgba(186,117,23,0.15)', 
+        borderRadius: 'var(--radius-lg)', 
+        padding: '12px 16px', 
+        marginBottom: 16,
+        fontSize: 13,
+        lineHeight: 1.6,
+        color: 'var(--text2)'
+      }}>
+        <strong>Causal Inference:</strong> Deconstruct the QuaSAR pipeline to isolate the impact of 
+        each reasoning stage. By running cumulative, leave-one-out, and isolated tests, 
+        we can pinpoint exactly where the value is being added and identify potential bottlenecks 
+        in the quasi-symbolic chain.
+      </div>
       <p className="muted" style={{ fontSize: 12, marginBottom: 16 }}>
         <strong style={{ color: 'var(--text)' }}>Goal:</strong> measure how much each of the four QuaSAR
         reasoning stages actually contributes to solving a math problem. We can't just run the full pipeline

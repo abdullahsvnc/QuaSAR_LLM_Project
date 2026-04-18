@@ -58,6 +58,20 @@ export default function AdversarialPage() {
   return (
     <div style={{ maxWidth:1100 }}>
       <h1 style={{ fontSize:18, fontWeight:500, marginBottom:4 }}>Adversarial Evaluation Suite</h1>
+      <div style={{ 
+        background: 'rgba(127,119,221,0.05)', 
+        border: '1px solid rgba(127,119,221,0.15)', 
+        borderRadius: 'var(--radius-lg)', 
+        padding: '12px 16px', 
+        marginBottom: 16,
+        fontSize: 13,
+        lineHeight: 1.6,
+        color: 'var(--text2)'
+      }}>
+        <strong>Robustness Stress Test:</strong> How fragile is the model's reasoning? This suite generates 
+        three types of adversarial "shuffles" (Numbers, Entities, or Logic) to see if the 
+        model is truly solving the problem or just memorizing patterns.
+      </div>
       <p className="muted" style={{ fontSize:12, marginBottom:20 }}>
         Generate perturbed variants of a problem and compare method robustness across perturbation types.
       </p>

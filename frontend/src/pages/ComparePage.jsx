@@ -13,29 +13,29 @@ const SAMPLES = [
 
 const METHODS_ORDER = ['standard', 'zeroshotcot', 'cot', 'quasar']
 const METHODS_INFO = {
-  standard:    { name: 'Standard Prompt',  description: 'Direct question — no prompting strategy' },
-  zeroshotcot: { name: 'Zero-shot CoT',    description: "Kojima et al., 2022 · 'Let's think step by step'" },
-  cot:         { name: 'Chain-of-Thought', description: 'Wei et al., 2022 · 6-shot exemplars' },
-  quasar:      { name: 'QuaSAR',           description: 'Ranaldi et al., ACL 2025 · 4-stage quasi-symbolic pipeline' },
+  standard: { name: 'Standard Prompt', description: 'Direct question — no prompting strategy' },
+  zeroshotcot: { name: 'Zero-shot CoT', description: "Kojima et al., 2022 · 'Let's think step by step'" },
+  cot: { name: 'Chain-of-Thought', description: 'Wei et al., 2022 · 6-shot exemplars' },
+  quasar: { name: 'QuaSAR', description: 'Ranaldi et al., ACL 2025 · 4-stage quasi-symbolic pipeline' },
 }
 
 const METHOD_COLORS = {
-  standard:    '#888780',
+  standard: '#888780',
   zeroshotcot: '#378ADD',
-  cot:         '#639922',
-  quasar:      '#BA7517',
+  cot: '#639922',
+  quasar: '#BA7517',
 }
 
 export default function ComparePage() {
-  const [problem,    setProblem]    = useState('')
-  const [groundTruth, setGT]        = useState('')
-  const [results,    setResults]    = useState(null)
-  const [loading,    setLoading]    = useState(false)
-  const [error,      setError]      = useState(null)
-  const [gsm8kProb,  setGsm8k]      = useState(null)
-  const [model,      setModel]      = useState(DEFAULT_MODEL_FRONT)
+  const [problem, setProblem] = useState('')
+  const [groundTruth, setGT] = useState('')
+  const [results, setResults] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [gsm8kProb, setGsm8k] = useState(null)
+  const [model, setModel] = useState(DEFAULT_MODEL_FRONT)
   const [loadingGSM, setLoadingGSM] = useState(false)
-  const [lastRunId,  setLastRunId]  = useState(null)
+  const [lastRunId, setLastRunId] = useState(null)
 
   const loadRandom = async () => {
     setLoadingGSM(true)
@@ -85,11 +85,11 @@ export default function ComparePage() {
 
       {/* Input area */}
       <div style={{
-        background:    'var(--bg2)',
-        border:        '1px solid var(--border)',
-        borderRadius:  'var(--radius-lg)',
-        padding:       16,
-        marginBottom:  20,
+        background: 'var(--bg2)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-lg)',
+        padding: 16,
+        marginBottom: 20,
       }}>
         {/* Sample buttons + model picker */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -168,10 +168,10 @@ export default function ComparePage() {
 
       {/* 2×2 grid of panels */}
       <div style={{
-        display:             'grid',
+        display: 'grid',
         gridTemplateColumns: 'repeat(2, 1fr)',
-        gap:                 12,
-        marginTop:           16,
+        gap: 12,
+        marginTop: 16,
       }}>
         {METHODS_ORDER.map(m => (
           <MethodPanel
@@ -203,10 +203,10 @@ function SummaryTable({ results, groundTruth }) {
 
   return (
     <div className="fade-in" style={{
-      background:   'var(--bg2)',
-      border:       '1px solid var(--border)',
+      background: 'var(--bg2)',
+      border: '1px solid var(--border)',
       borderRadius: 'var(--radius-lg)',
-      overflow:     'hidden',
+      overflow: 'hidden',
     }}>
       <div style={{ padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
         <span className="label">Run summary</span>
@@ -218,36 +218,36 @@ function SummaryTable({ results, groundTruth }) {
       </div>
       <div style={{ display: 'flex' }}>
         {methods.map(m => {
-          const r      = results[m]
+          const r = results[m]
           const status = getStatus(r)
-          const color  = METHOD_COLORS[m] || '#888'
+          const color = METHOD_COLORS[m] || '#888'
           const statusColor = status === 'correct' ? '#639922'
-                            : status === 'wrong'   ? '#E24B4A'
-                            : status === 'error'   ? '#888780'
-                            : 'var(--text2)'
+            : status === 'wrong' ? '#E24B4A'
+              : status === 'error' ? '#888780'
+                : 'var(--text2)'
           const statusLabel = status === 'correct' ? '✓ Correct'
-                            : status === 'wrong'   ? `✗ Wrong (got ${r?.extracted_answer ?? '?'})`
-                            : status === 'error'   ? '— No answer'
-                            : `→ ${r?.extracted_answer ?? '?'}`
+            : status === 'wrong' ? `✗ Wrong (got ${r?.extracted_answer ?? '?'})`
+              : status === 'error' ? '— No answer'
+                : `→ ${r?.extracted_answer ?? '?'}`
           return (
             <div key={m} style={{
-              flex:         1,
-              padding:      '12px 14px',
-              borderRight:  '1px solid var(--border)',
-              display:      'flex',
-              flexDirection:'column',
-              gap:          5,
+              flex: 1,
+              padding: '12px 14px',
+              borderRight: '1px solid var(--border)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 5,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{
-                  background:    color,
-                  color:         '#fff',
-                  fontSize:      9,
-                  fontWeight:    600,
+                  background: color,
+                  color: '#fff',
+                  fontSize: 9,
+                  fontWeight: 600,
                   letterSpacing: '0.08em',
-                  padding:       '1px 6px',
-                  borderRadius:  3,
-                  fontFamily:    'var(--font-mono)',
+                  padding: '1px 6px',
+                  borderRadius: 3,
+                  fontFamily: 'var(--font-mono)',
                 }}>
                   {m === 'zeroshotcot' ? 'ZS-CoT' : m === 'standard' ? 'STD' : m.toUpperCase()}
                 </span>
