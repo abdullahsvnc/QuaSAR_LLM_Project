@@ -163,14 +163,38 @@ export default function AdversarialPage() {
 function AdversarialResults({ result, methods }) {
   const { evaluation } = result
   const [selected, setSelected] = useState(0)
+  const skipped = evaluation.filter(ev => ev.scoreable === false)
 
   return (
     <div className="fade-in" style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      {skipped.length > 0 && (
+        <div style={{
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px dashed var(--border2)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '10px 14px', fontSize: 12, lineHeight: 1.6, color: 'var(--text2)',
+        }}>
+          <div className="label" style={{ marginBottom: 6 }}>Skipped — not algebraically scoreable</div>
+          {skipped.map((ev, i) => (
+            <div key={i} style={{ marginTop: 4 }}>
+              <span style={{
+                fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 3,
+                background: 'rgba(255,255,255,0.06)', color: 'var(--text3)',
+                fontFamily: 'var(--font-mono)', marginRight: 6,
+              }}>{ev.label}</span>
+              <span className="muted" style={{ fontSize: 11 }}>
+                {ev.reliability_reason || 'no derivable ground truth'} — variant shown but excluded from ✓/✗ scoring
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Robustness summary table */}
       <div style={{ background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', overflow:'hidden' }}>
         <div style={{ padding:'10px 16px', borderBottom:'1px solid var(--border)' }}>
           <span className="label">Robustness summary</span>
-          <span className="muted" style={{ fontSize:11, marginLeft:8 }}>✓ = correct answer extracted</span>
+          <span className="muted" style={{ fontSize:11, marginLeft:8 }}>✓ correct · ✗ wrong · ⊘ not scoreable</span>
         </div>
         <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
           <thead>
@@ -196,20 +220,25 @@ function AdversarialResults({ result, methods }) {
                     }}>
                       {ev.label}
                     </span>
-                    <span style={{ color:'var(--text2)', fontSize:11 }}>ans: <strong style={{ fontFamily:'var(--font-mono)' }}>{ev.ground_truth}</strong></span>
+                    {ev.scoreable === false ? (
+                      <span className="muted" style={{ fontSize:11, fontStyle:'italic' }}>not scoreable</span>
+                    ) : (
+                      <span style={{ color:'var(--text2)', fontSize:11 }}>ans: <strong style={{ fontFamily:'var(--font-mono)' }}>{ev.ground_truth}</strong></span>
+                    )}
                   </div>
                 </td>
                 {methods.map(m => {
                   const mr = ev.methods[m]
                   const correct = mr?.correct
+                  const symbol = correct === true ? '✓'
+                              : correct === false ? '✗'
+                              : '⊘'
+                  const color = correct === true ? '#639922'
+                              : correct === false ? '#E24B4A'
+                              : 'var(--text3)'
                   return (
-                    <td key={m} style={{ padding:'10px 14px', textAlign:'center' }}>
-                      <span style={{
-                        fontSize:14,
-                        color: correct ? '#639922' : '#E24B4A',
-                      }}>
-                        {correct ? '✓' : '✗'}
-                      </span>
+                    <td key={m} style={{ padding:'10px 14px', textAlign:'center' }} title={correct === null ? (ev.reliability_reason || 'not scoreable') : undefined}>
+                      <span style={{ fontSize:14, color }}>{symbol}</span>
                     </td>
                   )
                 })}
@@ -242,8 +271,15 @@ function AdversarialResults({ result, methods }) {
                     <div style={{ padding:'7px 12px', borderBottom:`1px solid ${meta.color}20`, display:'flex', alignItems:'center', gap:8 }}>
                       <span style={{ background:meta.color, color:'#fff', fontSize:9, fontWeight:600, padding:'1px 7px', borderRadius:3, fontFamily:'var(--font-mono)' }}>{meta.label}</span>
                       {mr && (
-                        <span style={{ marginLeft:'auto', fontSize:11, color: mr.correct ? '#639922':'#E24B4A' }}>
-                          {mr.correct ? '✓ correct' : `✗ extracted: ${mr.extracted_answer ?? '?'}`}
+                        <span style={{
+                          marginLeft:'auto', fontSize:11,
+                          color: mr.correct === true ? '#639922'
+                               : mr.correct === false ? '#E24B4A'
+                               : 'var(--text3)',
+                        }}>
+                          {mr.correct === true  ? '✓ correct'
+                          : mr.correct === false ? `✗ extracted: ${mr.extracted_answer ?? '?'}`
+                          : `⊘ extracted: ${mr.extracted_answer ?? '?'} (not scoreable)`}
                         </span>
                       )}
                     </div>

@@ -83,3 +83,5 @@ backend/cache/
 *.log
 pip-log.txt
 pip-delete-this-directory.txt
+
+quasar_proposal.pdf

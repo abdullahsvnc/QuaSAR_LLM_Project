@@ -204,7 +204,7 @@ function AblationResults({ result, includeSAP }) {
   const { analysis, sap_delta, run_id, n_problems } = result
   if (!analysis) return null
 
-  const { per_stage, full_accuracy } = analysis
+  const { per_stage, full_accuracy, narrative_summary } = analysis
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -215,9 +215,11 @@ function AblationResults({ result, includeSAP }) {
         </strong> · saved to Dashboard
       </div>
 
-      <InterpretationGuide />
+      <InterpretationGuide narrative={narrative_summary} />
 
       <PerStageTable perStage={per_stage} />
+
+      <StageDemoPanel perStage={per_stage} />
 
       <ViewCards perStage={per_stage} view="loo" />
       <ViewCards perStage={per_stage} view="cumulative" />
@@ -232,12 +234,25 @@ function AblationResults({ result, includeSAP }) {
 
 /* ─── How to read results ──────────────────────────────────────────────── */
 
-function InterpretationGuide() {
+function InterpretationGuide({ narrative }) {
   return (
     <div style={{
       background: 'var(--bg2)', border: '1px solid var(--border)',
       borderRadius: 'var(--radius-lg)', padding: '12px 16px',
     }}>
+      {narrative && (
+        <div style={{
+          marginBottom: 12, padding: '10px 12px',
+          background: 'rgba(186,117,23,0.06)',
+          border: '1px solid rgba(186,117,23,0.18)',
+          borderRadius: 'var(--radius)',
+          fontSize: 12, lineHeight: 1.65, color: 'var(--text2)',
+          whiteSpace: 'pre-line',
+        }}>
+          <div className="label" style={{ marginBottom: 6, color: '#BA7517' }}>Auto-narrative — why these numbers</div>
+          {narrative}
+        </div>
+      )}
       <div className="label" style={{ marginBottom: 8 }}>How to read these results</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, fontSize: 11, lineHeight: 1.6 }}>
         <div>
@@ -307,6 +322,18 @@ function PerStageTable({ perStage }) {
                     fontSize: 9, fontWeight: 700,
                   }}>{s.stage}</div>
                   <span style={{ color: s.color, fontWeight: 500 }}>{s.name}</span>
+                  {s.divergence?.narrative && (
+                    <span
+                      title={s.divergence.narrative}
+                      style={{
+                        cursor: 'help',
+                        fontSize: 10, color: 'var(--text3)',
+                        border: '1px solid var(--border2)', borderRadius: '50%',
+                        width: 14, height: 14, display: 'inline-flex',
+                        alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >ⓘ</span>
+                  )}
                 </div>
               </td>
               <Pct value={s.cumulative_accuracy} />
@@ -409,6 +436,162 @@ function ViewCards({ perStage, view }) {
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+/* ─── Stage demo panel — explains WHY each stage's number is what it is ── */
+
+function StageDemoPanel({ perStage }) {
+  const [active, setActive] = useState(0)
+  const [pairIdx, setPairIdx] = useState(0)
+
+  const stage = perStage[active]
+  const div = stage?.divergence
+  if (!div) return null
+
+  const pairs = div.sample_pairs || []
+  const pair = pairs[pairIdx % Math.max(pairs.length, 1)]
+
+  return (
+    <div style={{
+      background: 'var(--bg2)', border: '1px solid var(--border)',
+      borderRadius: 'var(--radius-lg)', overflow: 'hidden',
+    }}>
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+        <span className="label">Stage demo — full QuaSAR vs ¬Sk side-by-side</span>
+        <span className="muted" style={{ fontSize: 11, marginLeft: 8 }}>
+          Concrete LLM traces showing where removing a stage changed the answer.
+        </span>
+      </div>
+
+      {/* Tab strip — one per stage */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
+        {perStage.map((s, i) => {
+          const isActive = i === active
+          const dec = s.divergence?.decisive_count ?? 0
+          return (
+            <button
+              key={s.stage}
+              onClick={() => { setActive(i); setPairIdx(0) }}
+              style={{
+                flex: 1, padding: '10px 12px',
+                background: isActive ? `${s.color}14` : 'transparent',
+                border: 'none',
+                borderBottom: isActive ? `2px solid ${s.color}` : '2px solid transparent',
+                color: isActive ? s.color : 'var(--text2)',
+                fontSize: 12, fontWeight: isActive ? 600 : 400,
+                cursor: 'pointer', textAlign: 'left',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{
+                  width: 16, height: 16, borderRadius: 8,
+                  background: s.color, color: '#fff',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 9, fontWeight: 700,
+                }}>{s.stage}</span>
+                <span>{s.name}</span>
+                <span className="muted" style={{ fontSize: 10, marginLeft: 'auto' }}>
+                  {dec} decisive
+                </span>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+
+      <div style={{ padding: 16 }}>
+        {/* Narrative */}
+        <div style={{
+          padding: '10px 12px', marginBottom: 14,
+          background: `${stage.color}10`,
+          border: `1px solid ${stage.color}30`,
+          borderRadius: 'var(--radius)',
+          fontSize: 12, lineHeight: 1.6, color: 'var(--text2)',
+        }}>
+          {div.narrative}
+        </div>
+
+        {pairs.length === 0 ? (
+          <p className="muted" style={{ fontSize: 12 }}>
+            No decisive divergences for this stage in the current sample. Increase n to surface examples.
+          </p>
+        ) : (
+          <>
+            {/* Problem header */}
+            <div style={{ marginBottom: 10, fontSize: 12, lineHeight: 1.6 }}>
+              <div className="label" style={{ marginBottom: 4 }}>Problem #{pair.problem_id}</div>
+              <div style={{ color: 'var(--text2)' }}>{pair.question}</div>
+              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text3)' }}>
+                Ground truth <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{pair.ground_truth}</strong>
+                {' · '}full extracted <strong style={{ fontFamily: 'var(--font-mono)', color: '#639922' }}>{String(pair.full_answer)}</strong>
+                {' · '}LOO extracted <strong style={{ fontFamily: 'var(--font-mono)', color: '#E24B4A' }}>{String(pair.loo_answer)}</strong>
+                {pair.divergence_line >= 0 && (<> {' · '} first divergence at line {pair.divergence_line + 1}</>)}
+              </div>
+            </div>
+
+            {/* Side-by-side traces */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <DivergenceTrace
+                title="Full QuaSAR (S1-S4)"
+                color="#BA7517"
+                text={pair.full_text}
+                divergenceLine={pair.divergence_line}
+              />
+              <DivergenceTrace
+                title={`¬S${stage.stage} (drop ${stage.name})`}
+                color="#E24B4A"
+                text={pair.loo_text}
+                divergenceLine={pair.divergence_line}
+              />
+            </div>
+
+            {pairs.length > 1 && (
+              <button
+                onClick={() => setPairIdx(i => (i + 1) % pairs.length)}
+                style={{
+                  marginTop: 12, background: 'var(--bg3)',
+                  border: '1px solid var(--border2)', color: 'var(--text2)',
+                  fontSize: 11, padding: '6px 14px',
+                }}
+              >
+                Show next example ({((pairIdx + 1) % pairs.length) + 1}/{pairs.length})
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function DivergenceTrace({ title, color, text, divergenceLine }) {
+  const lines = (text || '—').split('\n')
+  return (
+    <div style={{
+      border: `1px solid ${color}28`, borderRadius: 'var(--radius)',
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        padding: '6px 10px', fontSize: 11, fontWeight: 500, color,
+        borderBottom: `1px solid ${color}20`, background: `${color}08`,
+      }}>{title}</div>
+      <div style={{ padding: 8, maxHeight: 360, overflowY: 'auto' }}>
+        <pre style={{
+          fontFamily: 'var(--font-mono)', fontSize: 10, lineHeight: 1.65,
+          margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+          color: 'var(--text2)',
+        }}>
+          {lines.map((ln, i) => (
+            <div key={i} style={{
+              background: i === divergenceLine ? 'rgba(226,75,74,0.12)' : 'transparent',
+              padding: i === divergenceLine ? '1px 4px' : '0 4px',
+              borderLeft: i === divergenceLine ? '2px solid #E24B4A' : '2px solid transparent',
+            }}>{ln || ' '}</div>
+          ))}
+        </pre>
       </div>
     </div>
   )

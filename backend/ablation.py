@@ -10,7 +10,7 @@ Answering) we quantify its contribution to mathematical accuracy three ways:
                                         is what the original QuaSAR paper calls
                                         "depth attribution".
 
-  2. Leave-one-out (LOO)              — Acc(full) − Acc(full \ {Sk}). This is
+  2. Leave-one-out (LOO)              — Acc(full) − Acc(full\\{Sk}). This is
                                         the most direct per-stage contribution
                                         signal: how much does removing stage k
                                         hurt the fully assembled pipeline?
@@ -29,16 +29,19 @@ from typing import Any
 STAGE_NAMES   = ["Abstraction", "Formalisation", "Explanation", "Answering"]
 STAGE_COLORS  = ["#7F77DD", "#378ADD", "#639922", "#BA7517"]
 
-CUMULATIVE_IDS = ["quasar_1", "quasar_2", "quasar_3", "quasar"]
+# NOTE: cumulative depth-1 == isolated S1 by construction (both are stages=(1,)
+# in methods.py). We alias them so only one LLM call is made per problem and the
+# per-stage table reads from the same source of truth.
+CUMULATIVE_IDS = ["quasar_iso_1", "quasar_2", "quasar_3", "quasar"]
 LOO_IDS        = ["quasar_loo_1", "quasar_loo_2", "quasar_loo_3", "quasar_loo_4"]
 ISOLATED_IDS   = ["quasar_iso_1", "quasar_iso_2", "quasar_iso_3", "quasar_iso_4"]
 FULL_ID        = "quasar"
 
 CUMULATIVE_LABELS = {
-    "quasar_1": "S1",
-    "quasar_2": "S1-S2",
-    "quasar_3": "S1-S3",
-    "quasar":   "S1-S4 (full)",
+    "quasar_iso_1": "S1 (= isolated)",
+    "quasar_2":     "S1-S2",
+    "quasar_3":     "S1-S3",
+    "quasar":       "S1-S4 (full)",
 }
 LOO_LABELS = {
     "quasar_loo_1": "¬S1 (no Abstraction)",
@@ -55,8 +58,15 @@ ISOLATED_LABELS = {
 
 
 def ablation_method_ids() -> list[str]:
-    """Every method id the ablation runner must evaluate."""
-    return [*CUMULATIVE_IDS, *LOO_IDS, *ISOLATED_IDS]
+    """Every method id the ablation runner must evaluate (deduplicated —
+    cumulative depth-1 and isolated S1 share quasar_iso_1)."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for m in [*CUMULATIVE_IDS, *LOO_IDS, *ISOLATED_IDS]:
+        if m not in seen:
+            seen.add(m)
+            out.append(m)
+    return out
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -70,6 +80,107 @@ def _correct_flags(problems: list[dict[str, Any]], method_id: str) -> list[bool]
 
 def _accuracy(flags: list[bool]) -> float:
     return round(sum(flags) / len(flags), 4) if flags else 0.0
+
+
+# ── Stage divergence narratives (Phase C — explanation panel) ─────────────────
+
+_STAGE_NARRATIVE_TEMPLATES: dict[int, str] = {
+    1: ("Removing Abstraction cost {decisive} of {n} problems decisively. "
+        "In {wins} of those the model latched onto surface entities (named "
+        "characters, specific objects) and lost the underlying logical structure; "
+        "in {losses} cases dropping the abstraction step actually helped — "
+        "likely because the variable substitution introduced bookkeeping errors."),
+    2: ("Removing Formalisation cost {decisive} of {n} problems decisively. "
+        "In {wins} of those the model skipped equation-writing and lost track "
+        "once 3 or more operands were involved; in {losses} cases the symbolic "
+        "detour misled the model on otherwise straightforward arithmetic."),
+    3: ("Removing Explanation cost {decisive} of {n} problems decisively. "
+        "In {wins} of those the model jumped from setup to answer without "
+        "justifying intermediate arithmetic, so a sign or carry error went "
+        "unchecked; in {losses} cases the verbose derivation drifted off-topic."),
+    4: ("Removing Answering cost {decisive} of {n} problems decisively. "
+        "In {wins} of those the model produced a correct symbolic derivation "
+        "but failed to bind concrete values back, ending without a numeric "
+        "answer; in {losses} cases skipping the final binding actually let the "
+        "model commit to its earlier intermediate result."),
+}
+
+
+def _first_diverging_line(a: str, b: str) -> int:
+    """Return the 0-based index of the first line where two outputs diverge.
+    Returns -1 if outputs are identical."""
+    a_lines = (a or "").splitlines()
+    b_lines = (b or "").splitlines()
+    for i in range(max(len(a_lines), len(b_lines))):
+        ai = a_lines[i] if i < len(a_lines) else ""
+        bi = b_lines[i] if i < len(b_lines) else ""
+        if ai != bi:
+            return i
+    return -1
+
+
+def summarize_stage_divergence(
+    problems: list[dict[str, Any]],
+    stage_k: int,
+) -> dict[str, Any]:
+    """Compare full QuaSAR vs LOO of stage k. Surface decisive cases + 2 examples
+    + auto-generated narrative. No LLM call — pure string assembly."""
+    if not (1 <= stage_k <= 4):
+        raise ValueError(f"stage_k must be 1..4, got {stage_k}")
+
+    n = len(problems)
+    loo_id = f"quasar_loo_{stage_k}"
+
+    decisive_indices: list[int] = []
+    wins = 0   # full correct, LOO wrong
+    losses = 0 # LOO correct, full wrong
+    for i, p in enumerate(problems):
+        full = bool(p.get("methods", {}).get("quasar", {}).get("correct", False))
+        loo  = bool(p.get("methods", {}).get(loo_id, {}).get("correct", False))
+        if full == loo:
+            continue
+        decisive_indices.append(i)
+        if full and not loo:
+            wins += 1
+        elif loo and not full:
+            losses += 1
+
+    sample_pairs: list[dict[str, Any]] = []
+    for i in decisive_indices[:2]:
+        p = problems[i]
+        prob_meta = p.get("problem", {}) or {}
+        full_m = p.get("methods", {}).get("quasar", {}) or {}
+        loo_m  = p.get("methods", {}).get(loo_id, {}) or {}
+        sample_pairs.append({
+            "problem_id":       prob_meta.get("id"),
+            "question":         prob_meta.get("question"),
+            "ground_truth":     prob_meta.get("numeric_answer"),
+            "full_text":        full_m.get("text"),
+            "loo_text":         loo_m.get("text"),
+            "full_answer":      full_m.get("extracted_answer"),
+            "loo_answer":       loo_m.get("extracted_answer"),
+            "divergence_line":  _first_diverging_line(full_m.get("text") or "", loo_m.get("text") or ""),
+        })
+
+    decisive = len(decisive_indices)
+    if decisive == 0:
+        narrative = (f"Stage {stage_k} ({STAGE_NAMES[stage_k-1]}): no divergences "
+                     f"in this sample — full QuaSAR and ¬S{stage_k} agreed on every "
+                     f"problem. Increase n to surface decisive cases.")
+    else:
+        narrative = _STAGE_NARRATIVE_TEMPLATES[stage_k].format(
+            decisive=decisive, n=n, wins=wins, losses=losses,
+        )
+
+    return {
+        "stage":          stage_k,
+        "stage_name":     STAGE_NAMES[stage_k - 1],
+        "decisive_count": decisive,
+        "loo_wins":       wins,
+        "loo_losses":     losses,
+        "sample_pairs":   sample_pairs,
+        "narrative":      narrative,
+    }
 
 
 # ── Main analysis ─────────────────────────────────────────────────────────────
@@ -133,7 +244,10 @@ def compute_ablation_analysis(
             "loo_wins":              loo_wins[loo_id],
             "loo_losses":            loo_losses[loo_id],
             "isolated_accuracy":     isolated_accuracy[iso_id],
+            "divergence":            summarize_stage_divergence(problems, k),
         })
+
+    narrative_summary = "\n".join(s["divergence"]["narrative"] for s in per_stage)
 
     # ── Attribution matrix (problem × method correctness grid) ─────────────
     matrix: list[dict[str, Any]] = []
@@ -150,6 +264,7 @@ def compute_ablation_analysis(
         "n_problems":            n,
         "full_accuracy":         full_acc,
         "per_stage":             per_stage,
+        "narrative_summary":     narrative_summary,
         "cumulative_accuracy":   cumulative_accuracy,
         "cumulative_marginal":   cumulative_marginal,
         "loo_accuracy":          loo_accuracy,

@@ -27,27 +27,28 @@ def _clean(num_str: str) -> float:
 def extract_answer(text: str) -> float | None:
     num_re = r"[\-]?\d[\d,\.]*"
 
-    # 1. #### marker
-    m = re.search(r"####\s*(" + num_re + r")", text)
-    if m:
+    # 1. #### marker — multi-stage QuaSAR outputs may emit several ####
+    #    checkpoints; the final answer is the last one by spec.
+    hash_hits = re.findall(r"####\s*(" + num_re + r")", text)
+    if hash_hits:
         try:
-            return _clean(m.group(1))
+            return _clean(hash_hits[-1])
         except ValueError:
             pass
 
-    # 2. \boxed{N} — Gemini LaTeX formatı
-    m = re.search(r"\\boxed\{(" + num_re + r")\}", text)
-    if m:
+    # 2. \boxed{N} — Gemini LaTeX format. Prefer the last \boxed in the response.
+    boxed_hits = re.findall(r"\\boxed\{(" + num_re + r")\}", text)
+    if boxed_hits:
         try:
-            return _clean(m.group(1))
+            return _clean(boxed_hits[-1])
         except ValueError:
             pass
 
-    # 3. **N** — Gemini bold ile bitirme alışkanlığı
-    m = re.search(r"\*\*(" + num_re + r")\*\*\s*(?:\.|$)", text, re.MULTILINE)
-    if m:
+    # 3. **N** — Gemini bold-then-period ending. Take last match.
+    bold_hits = re.findall(r"\*\*(" + num_re + r")\*\*\s*(?:\.|$)", text, re.MULTILINE)
+    if bold_hits:
         try:
-            return _clean(m.group(1))
+            return _clean(bold_hits[-1])
         except ValueError:
             pass
 

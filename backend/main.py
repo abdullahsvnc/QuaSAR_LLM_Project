@@ -221,6 +221,7 @@ def cache_stats() -> dict[str, int]:
 
 @app.get("/api/gsm8k/sample")
 def gsm8k_sample(n: int = 5, split: str = "test", seed: int | None = None) -> dict[str, Any]:
+    """Truly random by default. Pass seed=42 for reproducible sampling."""
     try:
         problems = load_problems(split=split, n=n, seed=seed)
         return {"problems": problems, "total": len(problems)}
@@ -332,7 +333,12 @@ async def batch_evaluate(req: BatchRequest) -> dict[str, Any]:
 
 @app.post("/api/adversarial")
 async def adversarial_evaluate(req: AdversarialRequest) -> dict[str, Any]:
-    """Algorithmic adversarial suite — zero LLM calls for variant generation."""
+    """Algorithmic adversarial suite — zero LLM calls for variant generation.
+
+    Variants without a derivable ground-truth answer (scoreable=False) are
+    still run through the LLM so the user can inspect outputs, but they are
+    excluded from accuracy aggregation — `correct` is set to None for them.
+    """
     mdl = req.model or MODEL
 
     # Generate variants algorithmically (no LLM cost)
@@ -343,9 +349,18 @@ async def adversarial_evaluate(req: AdversarialRequest) -> dict[str, Any]:
     )
 
     all_problems: list[dict[str, Any]] = [
-        {"type": "original", "label": "Original", "problem": req.problem, "answer": req.answer}
+        {
+            "type": "original", "label": "Original",
+            "problem": req.problem, "answer": req.answer,
+            "scoreable": True, "reliability_reason": None,
+        }
     ] + [
-        {"type": v["type"], "label": v["label"], "problem": v["variant"], "answer": v["answer"]}
+        {
+            "type": v["type"], "label": v["label"],
+            "problem": v["variant"], "answer": v.get("answer"),
+            "scoreable": bool(v.get("scoreable", v.get("reliable", False))),
+            "reliability_reason": v.get("reliability_reason"),
+        }
         for v in variants
     ]
 
@@ -360,17 +375,22 @@ async def adversarial_evaluate(req: AdversarialRequest) -> dict[str, Any]:
                 "label": prob_meta["label"],
                 "problem": prob_meta["problem"],
                 "ground_truth": prob_meta["answer"],
+                "scoreable": prob_meta["scoreable"],
+                "reliability_reason": prob_meta["reliability_reason"],
                 "methods": {},
             }
             for mid, r in zip(req.methods, method_results):
                 if isinstance(r, BaseException):
                     out["methods"][mid] = {
                         "method_id": mid, "error": str(r),
-                        "text": None, "extracted_answer": None, "correct": False,
+                        "text": None, "extracted_answer": None, "correct": None,
                     }
                     continue
                 rd = dict(r)
-                rd["correct"] = is_correct(rd.get("extracted_answer"), prob_meta["answer"])
+                if prob_meta["scoreable"] and prob_meta["answer"] is not None:
+                    rd["correct"] = is_correct(rd.get("extracted_answer"), prob_meta["answer"])
+                else:
+                    rd["correct"] = None
                 out["methods"][rd["method_id"]] = rd
             return out
 
