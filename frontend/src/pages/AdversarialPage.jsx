@@ -27,6 +27,26 @@ export default function AdversarialPage() {
 
   const [loadingGSM, setLoadingGSM] = useState(false)
 
+  // Batch Robustness panel — aggregate paper-Table-4-style metrics over many GSM8K problems
+  const [batchN,        setBatchN]        = useState(20)
+  const [batchSeed,     setBatchSeed]     = useState(42)
+  const [batchLoading,  setBatchLoading]  = useState(false)
+  const [batchResult,   setBatchResult]   = useState(null)
+  const [batchError,    setBatchError]    = useState(null)
+
+  const runBatch = async () => {
+    setBatchLoading(true); setBatchResult(null); setBatchError(null)
+    try {
+      const data = await api.adversarialBatch({
+        n: parseInt(batchN, 10),
+        seed: parseInt(batchSeed, 10),
+        methods, types, model,
+      })
+      setBatchResult(data)
+    } catch(e) { setBatchError(e.message) }
+    finally { setBatchLoading(false) }
+  }
+
   const loadRandom = async () => {
     setLoadingGSM(true)
     try {
@@ -156,6 +176,123 @@ export default function AdversarialPage() {
 
       {/* Results */}
       {result && <AdversarialResults result={result} methods={methods} />}
+
+      {/* Batch Robustness — aggregate over N GSM8K problems */}
+      <div style={{ marginTop:32, background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', padding:16 }}>
+        <h2 style={{ fontSize:15, fontWeight:500, marginBottom:4 }}>Batch Robustness</h2>
+        <p className="muted" style={{ fontSize:12, marginBottom:12 }}>
+          Sample N GSM8K problems, generate perturbed variants algorithmically, run all methods on each.
+          Aggregates paper-Table-4-style robustness drop. Cached calls re-use prior runs.
+        </p>
+        <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:12, flexWrap:'wrap' }}>
+          <span className="label">N</span>
+          <input type="number" min={5} max={200} value={batchN} onChange={e=>setBatchN(e.target.value)}
+            style={{ width:70, padding:'4px 8px', fontFamily:'var(--font-mono)' }} />
+          <span className="label">seed</span>
+          <input type="number" value={batchSeed} onChange={e=>setBatchSeed(e.target.value)}
+            style={{ width:70, padding:'4px 8px', fontFamily:'var(--font-mono)' }} />
+          <button onClick={runBatch} disabled={batchLoading || methods.length===0 || types.length===0}
+            style={{ background:'#7F77DD', color:'#fff', padding:'6px 16px', fontSize:11,
+                     fontWeight:500, letterSpacing:'0.08em', textTransform:'uppercase' }}>
+            {batchLoading ? '⏳ Running…' : '▶ Run batch'}
+          </button>
+          {batchError && <span style={{ fontSize:12, color:'#E24B4A' }}>{batchError}</span>}
+        </div>
+        {batchResult && <BatchRobustness data={batchResult} methods={methods} types={types} />}
+      </div>
+    </div>
+  )
+}
+
+function BatchRobustness({ data, methods, types }) {
+  const variantTypes = ['original', ...types]
+  const fmtPct = v => v == null ? '—' : `${(v*100).toFixed(1)}%`
+  const fmtDrop = v => v == null ? '—' : `${v >= 0 ? '−' : '+'}${Math.abs(v).toFixed(1)}pp`
+
+  // Find best (lowest drop) for highlighting
+  const drops = methods.map(m => data.method_robustness[m]?.avg_drop_pp).filter(v => v != null)
+  const minDrop = drops.length ? Math.min(...drops) : null
+
+  return (
+    <div className="fade-in" style={{ display:'flex', flexDirection:'column', gap:14 }}>
+      <div style={{ background:'var(--bg3)', border:'1px solid var(--border2)', borderRadius:'var(--radius)',
+                    padding:'8px 12px', fontSize:11, color:'var(--text2)', display:'flex', gap:18, flexWrap:'wrap' }}>
+        <span><strong>n problems:</strong> {data.n_problems}</span>
+        {variantTypes.map(t => (
+          <span key={t}>
+            <strong>{t === 'original' ? 'orig' : (TYPE_META[t]?.label || t)}:</strong>{' '}
+            {data.n_scoreable_per_type[t]} scoreable
+          </span>
+        ))}
+      </div>
+
+      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+        <thead>
+          <tr style={{ background:'var(--bg3)' }}>
+            <th style={{ padding:'8px 14px', textAlign:'left', fontSize:10, color:'var(--text3)',
+                         fontWeight:500, letterSpacing:'0.08em', textTransform:'uppercase' }}>Method</th>
+            {variantTypes.map(t => (
+              <th key={t} style={{ padding:'8px 14px', textAlign:'center', fontSize:10, color:'var(--text3)',
+                                   fontWeight:500, letterSpacing:'0.08em', textTransform:'uppercase' }}>
+                {t === 'original' ? 'Original' : (TYPE_META[t]?.label || t)}
+              </th>
+            ))}
+            <th style={{ padding:'8px 14px', textAlign:'center', fontSize:10, color:'var(--text3)',
+                         fontWeight:500, letterSpacing:'0.08em', textTransform:'uppercase' }}>Avg Drop</th>
+          </tr>
+        </thead>
+        <tbody>
+          {methods.map((m, i) => {
+            const row = data.method_robustness[m] || {}
+            const meta = METHOD_META[m] || { label:m, color:'#888' }
+            const isBest = row.avg_drop_pp != null && row.avg_drop_pp === minDrop
+            return (
+              <tr key={m} style={{ borderTop: i ? '1px solid var(--border)' : 'none' }}>
+                <td style={{ padding:'10px 14px' }}>
+                  <span style={{ background:meta.color, color:'#fff', fontSize:9, fontWeight:600,
+                                 padding:'2px 7px', borderRadius:3, fontFamily:'var(--font-mono)' }}>
+                    {meta.label}
+                  </span>
+                </td>
+                {variantTypes.map(t => (
+                  <td key={t} style={{ padding:'10px 14px', textAlign:'center', fontFamily:'var(--font-mono)' }}>
+                    {fmtPct(row[t])}
+                  </td>
+                ))}
+                <td style={{ padding:'10px 14px', textAlign:'center', fontFamily:'var(--font-mono)',
+                             fontWeight:isBest ? 600 : 400,
+                             color: isBest ? '#639922' : 'var(--text2)' }}>
+                  {fmtDrop(row.avg_drop_pp)} {isBest && '★'}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+
+      {/* Bar chart of avg drop */}
+      <div>
+        <div className="label" style={{ marginBottom:6 }}>Avg robustness drop (pp)</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+          {methods.map(m => {
+            const v = data.method_robustness[m]?.avg_drop_pp
+            const meta = METHOD_META[m] || { label:m, color:'#888' }
+            const maxAbs = Math.max(...drops.map(Math.abs), 1)
+            const pct = v == null ? 0 : (Math.abs(v) / maxAbs) * 100
+            return (
+              <div key={m} style={{ display:'flex', alignItems:'center', gap:8, fontSize:11 }}>
+                <span style={{ width:60, fontFamily:'var(--font-mono)', fontSize:10 }}>{meta.label}</span>
+                <div style={{ flex:1, height:14, background:'var(--bg3)', borderRadius:2, position:'relative' }}>
+                  <div style={{ width:`${pct}%`, height:'100%', background:meta.color, borderRadius:2 }} />
+                </div>
+                <span style={{ width:60, textAlign:'right', fontFamily:'var(--font-mono)', fontSize:10 }}>
+                  {fmtDrop(v)}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }

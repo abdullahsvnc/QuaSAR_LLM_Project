@@ -56,23 +56,38 @@ FAST_MODEL = os.getenv("FAST_MODEL", "gpt-4o-mini")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 
 _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 _gemini_client = AsyncOpenAI(api_key=GEMINI_API_KEY or "missing", base_url=_GEMINI_BASE) if GEMINI_API_KEY else None
 _openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+# Ollama exposes an OpenAI-compatible API at :11434/v1. Always available
+# (model loading is lazy on the daemon side); errors surface at call time.
+_ollama_client = AsyncOpenAI(api_key="ollama", base_url=OLLAMA_BASE_URL)
 
 
 def _provider_for(model_name: str) -> str:
     m = model_name.lower()
+    if m.startswith(("ollama/", "local/")):
+        return "ollama"
     if m.startswith("gemini"):
         return "gemini"
     # gpt-*, o*, chatgpt-* all live on the OpenAI endpoint
     return "openai"
 
 
+def _bare_model_id(model_name: str) -> str:
+    """Strip provider prefix before sending to the API (`ollama/llama3.1:8b` → `llama3.1:8b`)."""
+    if "/" in model_name and model_name.split("/", 1)[0].lower() in ("ollama", "local"):
+        return model_name.split("/", 1)[1]
+    return model_name
+
+
 def _client_for(model_name: str) -> AsyncOpenAI:
     provider = _provider_for(model_name)
+    if provider == "ollama":
+        return _ollama_client
     if provider == "gemini":
         if _gemini_client is None:
             raise HTTPException(500, "GEMINI_API_KEY is not set in backend/.env")
@@ -117,6 +132,14 @@ class AdversarialRequest(BaseModel):
     types: list[str] = ["numerical_swap", "entity_swap", "structural_swap"]
     model: str | None = None
 
+class AdversarialBatchRequest(BaseModel):
+    n: int = 30
+    split: str = "test"
+    seed: int = 42
+    methods: list[str] = ["standard", "zeroshotcot", "cot", "quasar"]
+    types: list[str] = ["numerical_swap", "entity_swap", "structural_swap"]
+    model: str | None = None
+
 class AblationRequest(BaseModel):
     n: int = 20
     split: str = "test"
@@ -126,18 +149,28 @@ class AblationRequest(BaseModel):
 
 # ── Core inference ────────────────────────────────────────────────────────────
 
-# QuaSAR prompts enumerate 1–4 stage headers so they need more output budget
-# than a plain standard/CoT prompt. Standard baselines keep a smaller budget.
-_MAX_TOKENS_QUASAR   = 1400
-_MAX_TOKENS_BASELINE = 700
+# Token budgets. QuaSAR's full 4-stage output is verbose: predicates,
+# formalisation, step-by-step explanation, then the final answer. Paper
+# Appendix I uses max_tokens=3500. Truncation mid-Explanation silently
+# corrupts the answer, so we match the paper here. Baselines get a
+# smaller (but still generous) budget.
+_MAX_TOKENS_QUASAR   = 3500
+_MAX_TOKENS_BASELINE = 1024
 
 _RETRY_ATTEMPTS = 4
 _RETRY_BASE_DELAY = 1.5  # seconds; doubles each attempt
 
-# Cap the number of in-flight Gemini requests regardless of which endpoint
-# dispatched them. Free-tier keys have aggressive per-minute quotas and this
-# is the simplest way to stay under them without coupling endpoints.
-_GLOBAL_API_SEM = asyncio.Semaphore(4)
+# Per-provider concurrency caps. Free-tier API keys have aggressive
+# per-minute quotas; local Ollama is GPU-bound and goes serial.
+_PROVIDER_SEMS: dict[str, asyncio.Semaphore] = {
+    "openai": asyncio.Semaphore(4),
+    "gemini": asyncio.Semaphore(4),
+    "ollama": asyncio.Semaphore(1),
+}
+
+
+def _sem_for(model_name: str) -> asyncio.Semaphore:
+    return _PROVIDER_SEMS[_provider_for(model_name)]
 
 
 def _max_tokens_for(method_id: str) -> int:
@@ -155,14 +188,16 @@ async def run_single(method_id: str, problem: str, mdl: str) -> dict[str, Any]:
     t0 = time.perf_counter()
 
     client = _client_for(mdl)
+    api_model = _bare_model_id(mdl)
+    sem = _sem_for(mdl)
 
     last_err: BaseException | None = None
     resp = None
     for attempt in range(_RETRY_ATTEMPTS):
         try:
-            async with _GLOBAL_API_SEM:
+            async with sem:
                 resp = await client.chat.completions.create(
-                    model=mdl,
+                    model=api_model,
                     messages=messages,  # type: ignore[arg-type]
                     max_tokens=_max_tokens_for(method_id),
                     temperature=0,
@@ -320,7 +355,12 @@ async def batch_evaluate(req: BatchRequest) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "run_id": run_id,
         "type": "batch",
-        "config": {"model": mdl, "n": req.n, "split": req.split, "seed": req.seed, "methods": req.methods},
+        "config": {
+            "model": mdl, "n": req.n, "split": req.split, "seed": req.seed,
+            "methods": req.methods,
+            "prompt_version": response_cache.PROMPT_VERSION,
+            "provider": _provider_for(mdl),
+        },
         "accuracy": accuracy,
         "mcnemar": mcnemar,
         "problems": list(all_results),
@@ -403,6 +443,140 @@ async def adversarial_evaluate(req: AdversarialRequest) -> dict[str, Any]:
     }
 
 
+@app.post("/api/adversarial/batch")
+async def adversarial_batch(req: AdversarialBatchRequest) -> dict[str, Any]:
+    """Aggregate robustness over N GSM8K problems × methods × perturbation types.
+
+    For each sampled problem we:
+      1. Generate algorithmic perturbations (numerical_swap, entity_swap,
+         structural_swap) via `generate_all_variants` — zero LLM calls.
+      2. Run each method on the original AND each scoreable perturbation.
+      3. Aggregate accuracy per method × variant_type and compute the
+         per-method `avg_drop_pp` = original_acc - mean(perturbed_acc).
+
+    This is the GSM-Symbolic-style robustness analog of the paper's Table 4.
+    """
+    mdl = req.model or MODEL
+
+    try:
+        problems = load_problems(split=req.split, n=req.n, seed=req.seed)
+    except Exception as e:
+        raise HTTPException(500, f"Failed to load GSM8K: {e}")
+
+    sem = asyncio.Semaphore(2)
+
+    async def run_one(prob: dict[str, Any]) -> dict[str, Any]:
+        """Build (original + each scoreable variant) and evaluate every method on each."""
+        gt = prob["numeric_answer"]
+        variants = generate_all_variants(
+            problem=prob["question"], answer=gt, types=req.types,
+        )
+        # per-variant blocks: type label + text + ground truth + scoreable flag
+        all_variants: list[dict[str, Any]] = [{
+            "type": "original", "text": prob["question"], "answer": gt, "scoreable": True,
+        }]
+        for v in variants:
+            all_variants.append({
+                "type": v["type"],
+                "text":  v["variant"],
+                "answer": v.get("answer"),
+                "scoreable": bool(v.get("scoreable", v.get("reliable", False))),
+            })
+
+        async with sem:
+            tasks = [
+                run_single(m, var["text"], mdl)
+                for var in all_variants for m in req.methods
+            ]
+            method_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # walk back through (variant, method) order
+        per_variant: dict[str, dict[str, Any]] = {}
+        idx = 0
+        for var in all_variants:
+            mblock: dict[str, Any] = {}
+            for m in req.methods:
+                r = method_results[idx]; idx += 1
+                if isinstance(r, BaseException):
+                    mblock[m] = {"correct": None, "error": str(r)}
+                    continue
+                rd = dict(r)
+                if var["scoreable"] and var["answer"] is not None:
+                    rd["correct"] = is_correct(rd.get("extracted_answer"), var["answer"])
+                else:
+                    rd["correct"] = None
+                mblock[m] = rd
+            per_variant[var["type"]] = {
+                "scoreable": var["scoreable"],
+                "ground_truth": var["answer"],
+                "methods": mblock,
+            }
+
+        return {"problem_id": prob.get("id"), "question": prob["question"], "variants": per_variant}
+
+    rows = await asyncio.gather(*[run_one(p) for p in problems])
+
+    # Aggregate: for each method × variant_type, count correct/scoreable
+    variant_types = ["original"] + list(req.types)
+    method_robustness: dict[str, dict[str, Any]] = {}
+    n_scoreable: dict[str, int] = {t: 0 for t in variant_types}
+
+    # First pass: count scoreable problems per type
+    for row in rows:
+        for t in variant_types:
+            if t in row["variants"] and row["variants"][t]["scoreable"]:
+                n_scoreable[t] += 1
+
+    for m in req.methods:
+        per_type: dict[str, float | None] = {}
+        for t in variant_types:
+            correct = 0; total = 0
+            for row in rows:
+                v = row["variants"].get(t)
+                if not v or not v["scoreable"]:
+                    continue
+                c = v["methods"].get(m, {}).get("correct")
+                if c is None:
+                    continue
+                total += 1
+                correct += int(bool(c))
+            per_type[t] = round(correct / total, 4) if total else None
+
+        # avg drop = original - mean(perturbed accuracies that exist)
+        orig = per_type.get("original")
+        perturbed = [per_type[t] for t in req.types if per_type.get(t) is not None]
+        if orig is not None and perturbed:
+            avg_drop_pp = round(100 * (orig - sum(perturbed) / len(perturbed)), 2)
+        else:
+            avg_drop_pp = None
+
+        method_robustness[m] = {**per_type, "avg_drop_pp": avg_drop_pp}
+
+    run_id = str(uuid.uuid4())[:8]
+    payload: dict[str, Any] = {
+        "run_id": run_id,
+        "type": "adversarial_batch",
+        "config": {
+            "model": mdl, "n": req.n, "split": req.split, "seed": req.seed,
+            "methods": req.methods, "types": req.types,
+            "prompt_version": response_cache.PROMPT_VERSION,
+            "provider": _provider_for(mdl),
+        },
+        "method_robustness": method_robustness,
+        "n_scoreable_per_type": n_scoreable,
+        "problems": list(rows),
+        "timestamp": time.time(),
+    }
+    (RESULTS_DIR / f"{run_id}.json").write_text(json.dumps(payload, indent=2))
+
+    return {
+        "run_id": run_id,
+        "method_robustness": method_robustness,
+        "n_scoreable_per_type": n_scoreable,
+        "n_problems": len(rows),
+    }
+
+
 @app.post("/api/ablation/run")
 async def run_ablation(req: AblationRequest) -> dict[str, Any]:
     """
@@ -454,7 +628,12 @@ async def run_ablation(req: AblationRequest) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "run_id": run_id,
         "type": "ablation",
-        "config": {"model": mdl, "n": req.n, "split": req.split, "seed": req.seed},
+        "config": {
+            "model": mdl, "n": req.n, "split": req.split, "seed": req.seed,
+            "include_sap": req.include_sap,
+            "prompt_version": response_cache.PROMPT_VERSION,
+            "provider": _provider_for(mdl),
+        },
         "analysis": analysis,
         "sap_delta": sap_delta,
         "problems": list(all_results),

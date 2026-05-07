@@ -24,6 +24,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from evaluator import mcnemar_test
+
 # ── Identifiers kept in sync with methods.py ──────────────────────────────────
 
 STAGE_NAMES   = ["Abstraction", "Formalisation", "Explanation", "Answering"]
@@ -227,12 +229,21 @@ def compute_ablation_analysis(
         m: _accuracy(correctness[m]) for m in ISOLATED_IDS
     }
 
+    # ── McNemar significance: full QuaSAR vs each LOO variant ─────────────
+    # Tests whether removing stage k significantly changes correctness.
+    # Reuses the same mcnemar_test used in batch route (Dror ACL 2018).
+    mcnemar_loo: dict[str, dict[str, Any]] = {
+        loo_id: mcnemar_test(full_correct, correctness[loo_id])
+        for loo_id in LOO_IDS
+    }
+
     # ── Per-stage summary (canonical per-stage contribution view) ─────────
     per_stage: list[dict[str, Any]] = []
     for k in range(1, 5):
         cum_id = CUMULATIVE_IDS[k - 1]
         loo_id = LOO_IDS[k - 1]
         iso_id = ISOLATED_IDS[k - 1]
+        mc = mcnemar_loo[loo_id]
         per_stage.append({
             "stage":                 k,
             "name":                  STAGE_NAMES[k - 1],
@@ -243,6 +254,8 @@ def compute_ablation_analysis(
             "loo_contribution":      loo_contribution[loo_id],
             "loo_wins":              loo_wins[loo_id],
             "loo_losses":            loo_losses[loo_id],
+            "loo_p_value":           mc["p_value"],
+            "loo_significant":       mc["significant"],
             "isolated_accuracy":     isolated_accuracy[iso_id],
             "divergence":            summarize_stage_divergence(problems, k),
         })
@@ -271,6 +284,7 @@ def compute_ablation_analysis(
         "loo_contribution":      loo_contribution,
         "loo_wins":              loo_wins,
         "loo_losses":            loo_losses,
+        "mcnemar_loo":           mcnemar_loo,
         "isolated_accuracy":     isolated_accuracy,
         "attribution_matrix":    matrix,
         "stage_names":           STAGE_NAMES,
@@ -298,11 +312,15 @@ def compute_sap_delta(
     sap_wins   = sum(int(s and not q) for s, q in zip(sap_correct, quasar_correct))
     sap_losses = sum(int(q and not s) for s, q in zip(sap_correct, quasar_correct))
 
+    mc = mcnemar_test(sap_correct, quasar_correct)
+
     return {
         "quasar_accuracy": round(quasar_acc, 4),
         "sap_accuracy":    round(sap_acc, 4),
         "delta":           round(sap_acc - quasar_acc, 4),
         "sap_wins":        sap_wins,
         "sap_losses":      sap_losses,
+        "p_value":         mc["p_value"],
+        "significant":     mc["significant"],
         "n_problems":      n,
     }

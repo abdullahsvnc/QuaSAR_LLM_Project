@@ -27,8 +27,21 @@ def _clean(num_str: str) -> float:
 def extract_answer(text: str) -> float | None:
     num_re = r"[\-]?\d[\d,\.]*"
 
-    # 1. #### marker — multi-stage QuaSAR outputs may emit several ####
-    #    checkpoints; the final answer is the last one by spec.
+    # 1. "The answer is: N" / "The final answer is N" — paper §2.1.4
+    #    (Ranaldi ACL 2025) QuaSAR/SAP format. Strict: only the strongest
+    #    explicit "answer is" phrasing. Take the last match in the text.
+    strict_phrase_re = re.compile(
+        r"(?:the\s+)?(?:final\s+)?answer\s+is\s*[:\s]?\s*(" + num_re + r")",
+        re.IGNORECASE,
+    )
+    strict_hits = strict_phrase_re.findall(text)
+    if strict_hits:
+        try:
+            return _clean(strict_hits[-1])
+        except ValueError:
+            pass
+
+    # 2. #### marker — GSM8K/CoT exemplar format (Wei 2022). Last hit wins.
     hash_hits = re.findall(r"####\s*(" + num_re + r")", text)
     if hash_hits:
         try:
@@ -36,7 +49,7 @@ def extract_answer(text: str) -> float | None:
         except ValueError:
             pass
 
-    # 2. \boxed{N} — Gemini LaTeX format. Prefer the last \boxed in the response.
+    # 3. \boxed{N} — Gemini LaTeX format. Prefer the last \boxed in the response.
     boxed_hits = re.findall(r"\\boxed\{(" + num_re + r")\}", text)
     if boxed_hits:
         try:
@@ -44,7 +57,7 @@ def extract_answer(text: str) -> float | None:
         except ValueError:
             pass
 
-    # 3. **N** — Gemini bold-then-period ending. Take last match.
+    # 4. **N** — Gemini bold-then-period ending. Take last match.
     bold_hits = re.findall(r"\*\*(" + num_re + r")\*\*\s*(?:\.|$)", text, re.MULTILINE)
     if bold_hits:
         try:
@@ -52,26 +65,24 @@ def extract_answer(text: str) -> float | None:
         except ValueError:
             pass
 
-    # 4. "the answer is N" vb. — TÜM eşleşmelerin SONUNCUSUNU al
-    answer_phrase_re = re.compile(
+    # 5. Loose closing phrases — result/total/therefore/so. Last match wins.
+    loose_phrase_re = re.compile(
         r"(?:"
-        r"(?:the\s+)?(?:final\s+)?answer\s+is\s*[:\s]?"
-        r"|result\s+is\s*[:\s]?"
+        r"result\s+is\s*[:\s]?"
+        r"|total\s+is\s*[:\s]?"
         r"|therefore[,\s]+(?:the\s+)?(?:answer\s+is\s*)?"
         r"|so[,\s]+(?:the\s+)?(?:answer\s+is\s*)?"
-        r"|total\s+is\s*[:\s]?"
-        r"|=\s*"
         r")(" + num_re + r")",
         re.IGNORECASE,
     )
-    all_phrase = answer_phrase_re.findall(text)
-    if all_phrase:
+    loose_hits = loose_phrase_re.findall(text)
+    if loose_hits:
         try:
-            return _clean(all_phrase[-1])
+            return _clean(loose_hits[-1])
         except ValueError:
             pass
 
-    # 5. Son 3 satır — cevap neredeyse her zaman en sonda
+    # 6. Last 3 lines — final answer almost always at the very end
     tail = "\n".join(text.strip().splitlines()[-3:])
     tail_numbers = re.findall(r"(?<!\w)(" + num_re + r")(?!\w)", tail)
     if tail_numbers:
@@ -80,7 +91,7 @@ def extract_answer(text: str) -> float | None:
         except ValueError:
             pass
 
-    # 6. Tüm metindeki son sayı — son çare
+    # 7. Last number in entire text — last resort
     numbers = re.findall(r"(?<!\w)(" + num_re + r")(?!\w)", text)
     if numbers:
         try:

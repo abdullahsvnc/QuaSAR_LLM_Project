@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-PROMPT_VERSION = "v2"
+PROMPT_VERSION = "v3"
 
 CACHE_DIR = Path("./cache")
 CACHE_DIR.mkdir(exist_ok=True)

@@ -301,7 +301,7 @@ function PerStageTable({ perStage }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr style={{ background: 'var(--bg3)' }}>
-            {['Stage', 'Cumulative acc', 'Cumulative Δ', 'LOO acc', 'LOO contribution Δ', 'Isolated acc'].map(h => (
+            {['Stage', 'Cumulative acc', 'Cumulative Δ', 'LOO acc', 'LOO contribution Δ', 'LOO p', 'Isolated acc'].map(h => (
               <th key={h} style={{
                 padding: '8px 16px', textAlign: 'left', fontSize: 10,
                 color: 'var(--text3)', fontWeight: 500,
@@ -340,6 +340,7 @@ function PerStageTable({ perStage }) {
               <Delta value={s.cumulative_marginal} />
               <Pct value={s.loo_accuracy} />
               <Delta value={s.loo_contribution} />
+              <PValue value={s.loo_p_value} significant={s.loo_significant} />
               <Pct value={s.isolated_accuracy} />
             </tr>
           ))}
@@ -353,6 +354,19 @@ function Pct({ value }) {
   return (
     <td style={{ padding: '10px 16px', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
       {(value * 100).toFixed(1)}%
+    </td>
+  )
+}
+
+function PValue({ value, significant }) {
+  if (value == null) {
+    return <td style={{ padding: '10px 16px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text3)' }}>—</td>
+  }
+  const color = significant ? '#639922' : 'var(--text3)'
+  const text = value >= 0.001 ? value.toFixed(4) : '<0.001'
+  return (
+    <td style={{ padding: '10px 16px', fontFamily: 'var(--font-mono)', fontSize: 12, color }}>
+      {text}{significant && ' ★'}
     </td>
   )
 }
@@ -620,6 +634,14 @@ function SapDelta({ sap_delta }) {
           { label: 'Δ (SAP − QuaSAR)', value: `${sap_delta.delta >= 0 ? '+' : ''}${(sap_delta.delta * 100).toFixed(1)}pp`, color: sap_delta.delta >= 0 ? '#639922' : '#E24B4A' },
           { label: 'SAP-only wins',  value: `+${sap_delta.sap_wins}`,   color: '#639922' },
           { label: 'SAP-only losses', value: `-${sap_delta.sap_losses}`, color: '#E24B4A' },
+          {
+            label: 'McNemar p',
+            value: sap_delta.p_value == null
+              ? '—'
+              : (sap_delta.p_value >= 0.001 ? sap_delta.p_value.toFixed(4) : '<0.001')
+                + (sap_delta.significant ? ' ★' : ''),
+            color: sap_delta.significant ? '#639922' : 'var(--text3)',
+          },
         ].map(item => (
           <div key={item.label} style={{ flex: 1, background: 'var(--bg3)', borderRadius: 'var(--radius)', padding: '10px 12px' }}>
             <div className="label" style={{ marginBottom: 5 }}>{item.label}</div>

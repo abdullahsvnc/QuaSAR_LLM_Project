@@ -26,6 +26,7 @@ export const api = {
   compare:     (body)                      => post('/compare', body),
   batch:       (body)                      => post('/batch', body),
   adversarial: (body)                      => post('/adversarial', body),
+  adversarialBatch: (body)                 => post('/adversarial/batch', body),
   runAblation: (body)                      => post('/ablation/run', body),
   listResults: ()                          => get('/results'),
   getResult:   (id)                        => get(`/results/${id}`),
