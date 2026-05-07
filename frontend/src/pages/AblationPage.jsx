@@ -12,6 +12,7 @@ const METHODS_PER_PROBLEM_SAP = 13 // + quasar_sap
 export default function AblationPage() {
   const [config,     setConfig]     = useState({ n: 20, split: 'test', seed: 42, model: DEFAULT_MODEL_FRONT })
   const [includeSAP, setIncludeSAP] = useState(true)
+  const [useMock,    setUseMock]    = useState(false)
   const [running,    setRunning]    = useState(false)
   const [result,     setResult]     = useState(null)
   const [error,      setError]      = useState(null)
@@ -25,6 +26,7 @@ export default function AblationPage() {
         seed:        config.seed,
         model:       config.model,
         include_sap: includeSAP,
+        use_mock:    useMock,
       })
       setResult(data)
     } catch (e) { setError(e.message) }
@@ -170,7 +172,7 @@ export default function AblationPage() {
           </label>
         </div>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, cursor: 'pointer' }}>
           <input type="checkbox" checked={includeSAP} onChange={e => setIncludeSAP(e.target.checked)} />
           <span style={{ fontSize: 12 }}>Include QuaSAR-SAP comparison</span>
           <span style={{
@@ -179,6 +181,19 @@ export default function AblationPage() {
             fontFamily: 'var(--font-mono)', fontWeight: 600, letterSpacing: '0.08em',
           }}>SAP</span>
           <span className="muted" style={{ fontSize: 11 }}>Original contribution — system-level quasi-symbolic priming</span>
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, cursor: 'pointer' }}>
+          <input type="checkbox" checked={useMock} onChange={e => setUseMock(e.target.checked)} />
+          <span style={{ fontSize: 12 }}>Use mock fixture (replay last run, no LLM)</span>
+          <span style={{
+            fontSize: 9, padding: '2px 7px', borderRadius: 3,
+            background: 'rgba(99,153,34,0.15)', color: '#639922',
+            fontFamily: 'var(--font-mono)', fontWeight: 600, letterSpacing: '0.08em',
+          }}>MOCK</span>
+          <span className="muted" style={{ fontSize: 11 }}>
+            Match key: model · n · seed · split · sap. First run saves fixture; reruns return saved data.
+          </span>
         </label>
 
         <p style={{ fontSize: 11, color: config.n >= 25 ? '#BA7517' : 'var(--text3)', marginBottom: 12 }}>
@@ -201,13 +216,27 @@ export default function AblationPage() {
 }
 
 function AblationResults({ result, includeSAP }) {
-  const { analysis, sap_delta, run_id, n_problems } = result
+  const { analysis, sap_delta, run_id, n_problems, from_mock, mock_saved, mock_file } = result
   if (!analysis) return null
 
   const { per_stage, full_accuracy, narrative_summary } = analysis
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {(from_mock || mock_saved) && (
+        <div style={{
+          fontSize: 11, padding: '8px 12px',
+          background: 'rgba(99,153,34,0.08)',
+          border: '1px solid rgba(99,153,34,0.25)',
+          borderRadius: 'var(--radius)', color: 'var(--text2)',
+        }}>
+          <strong style={{ color: '#639922' }}>
+            {from_mock ? 'Replayed from mock' : 'Saved as mock fixture'}
+          </strong>{' · '}
+          <code style={{ fontFamily: 'var(--font-mono)' }}>{mock_file}</code>
+          {from_mock && ' — no LLM calls were made'}
+        </div>
+      )}
       <div style={{ fontSize: 11, color: 'var(--text3)' }}>
         Run <code style={{ fontFamily: 'var(--font-mono)' }}>{run_id}</code> · {n_problems} problems ·
         full QuaSAR accuracy <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>

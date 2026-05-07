@@ -102,6 +102,14 @@ RESULTS_DIR.mkdir(exist_ok=True)
 COMPARE_DIR = Path("./compare_results")
 COMPARE_DIR.mkdir(exist_ok=True)
 
+MOCK_DIR = Path("./mocks")
+MOCK_DIR.mkdir(exist_ok=True)
+
+
+def _ablation_mock_path(model: str, n: int, seed: int, include_sap: bool, split: str) -> Path:
+    safe_model = model.replace("/", "_").replace(":", "-")
+    return MOCK_DIR / f"ablation_{safe_model}_{split}_n{n}_seed{seed}_sap{int(include_sap)}.json"
+
 app = FastAPI(title="QuaSAR Ablation Lab", version="2.0.0")
 app.add_middleware(
     CORSMiddleware,
@@ -146,6 +154,9 @@ class AblationRequest(BaseModel):
     seed: int = 42
     include_sap: bool = True
     model: str | None = None
+    # Replay/save fixture: skip LLM if a mock matching (model, n, seed, sap, split)
+    # exists; otherwise run normally and persist the result as a mock for next time.
+    use_mock: bool = False
 
 # ── Core inference ────────────────────────────────────────────────────────────
 
@@ -589,6 +600,18 @@ async def run_ablation(req: AblationRequest) -> dict[str, Any]:
     if req.include_sap:
         ablation_methods.append("quasar_sap")
 
+    mock_path = _ablation_mock_path(mdl, req.n, req.seed, req.include_sap, req.split)
+    if req.use_mock and mock_path.exists():
+        cached = json.loads(mock_path.read_text())
+        return {
+            "run_id": cached.get("run_id"),
+            "analysis": cached.get("analysis"),
+            "sap_delta": cached.get("sap_delta", {}),
+            "n_problems": len(cached.get("problems", [])),
+            "from_mock": True,
+            "mock_file": mock_path.name,
+        }
+
     try:
         problems = load_problems(split=req.split, n=req.n, seed=req.seed)
     except Exception as e:
@@ -641,7 +664,50 @@ async def run_ablation(req: AblationRequest) -> dict[str, Any]:
     }
     (RESULTS_DIR / f"{run_id}.json").write_text(json.dumps(payload, indent=2))
 
-    return {"run_id": run_id, "analysis": analysis, "sap_delta": sap_delta, "n_problems": len(all_results)}
+    saved_mock = False
+    if req.use_mock:
+        mock_path.write_text(json.dumps(payload, indent=2))
+        saved_mock = True
+
+    return {
+        "run_id": run_id,
+        "analysis": analysis,
+        "sap_delta": sap_delta,
+        "n_problems": len(all_results),
+        "from_mock": False,
+        "mock_saved": saved_mock,
+        "mock_file": mock_path.name if saved_mock else None,
+    }
+
+
+@app.get("/api/ablation/mocks")
+def list_ablation_mocks() -> dict[str, list[dict[str, Any]]]:
+    """List saved ablation fixtures for replay."""
+    mocks: list[dict[str, Any]] = []
+    for f in sorted(MOCK_DIR.glob("ablation_*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
+        try:
+            data = json.loads(f.read_text())
+            mocks.append({
+                "file":      f.name,
+                "run_id":    data.get("run_id"),
+                "config":    data.get("config"),
+                "timestamp": data.get("timestamp"),
+                "n_problems": len(data.get("problems", [])),
+            })
+        except Exception:
+            pass
+    return {"mocks": mocks}
+
+
+@app.delete("/api/ablation/mocks/{name}")
+def delete_ablation_mock(name: str) -> dict[str, Any]:
+    if "/" in name or ".." in name or not name.startswith("ablation_"):
+        raise HTTPException(400, "invalid mock name")
+    path = MOCK_DIR / name
+    if not path.exists():
+        raise HTTPException(404, "not found")
+    path.unlink()
+    return {"deleted": name}
 
 
 @app.get("/api/results")

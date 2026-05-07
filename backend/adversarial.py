@@ -140,39 +140,18 @@ _NAMES: list[str] = [
     "Lisa", "Paul", "Amy", "Eric", "Lucy", "Jack", "Mia", "Ryan",
     "Hannah", "Tyler", "Sophia", "Ethan", "Ava", "Nathan", "Emily",
     "Julia", "Leo", "Zoe", "Max",
+    # Names appearing frequently in GSM8K
+    "Janet", "Jared", "Jordan", "Dominick", "Tina", "Tim", "Jim", "Joy",
+    "Kim", "Ken", "Ben", "Beth", "Carla", "Carlos", "Diana", "Daniel",
+    "Elena", "Elsa", "Felix", "Fiona", "Gina", "Greg", "Holly", "Ivan",
+    "Jenny", "Kevin", "Karen", "Laura", "Lena", "Megan", "Nina", "Oscar",
+    "Pam", "Pedro", "Rita", "Roger", "Steve", "Susan", "Terry", "Trevor",
+    "Vera", "Walter", "Yvonne", "Zara", "Linda", "Maya", "Nora", "Owen",
+    "Rosa", "Tara", "Wade", "Bill", "Brian", "Brenda", "Chad", "Cindy",
+    "Donald", "Donna", "Edward", "Eve", "Gary", "Gloria", "Harold", "Helen",
+    "Jeff", "Joan", "Larry", "Lori", "Marcus", "Nancy", "Patricia", "Robert",
+    "Stephanie", "Theodore", "Wesley",
 ]
-
-# Object nouns → neutral token
-_OBJECTS: dict[str, str] = {
-    "apple": "unit", "apples": "units",
-    "orange": "unit", "oranges": "units",
-    "banana": "unit", "bananas": "units",
-    "mango": "unit", "mangoes": "units",
-    "cookie": "unit", "cookies": "units",
-    "candy": "unit", "candies": "units",
-    "cake": "unit", "cakes": "units",
-    "pie": "unit", "pies": "units",
-    "marble": "token", "marbles": "tokens",
-    "ball": "token", "balls": "tokens",
-    "toy": "token", "toys": "tokens",
-    "card": "token", "cards": "tokens",
-    "sticker": "token", "stickers": "tokens",
-    "book": "object", "books": "objects",
-    "pencil": "object", "pencils": "objects",
-    "pen": "object", "pens": "objects",
-    "notebook": "object", "notebooks": "objects",
-    "flower": "item", "flowers": "items",
-    "tree": "item", "trees": "items",
-    "car": "vehicle", "cars": "vehicles",
-    "bike": "vehicle", "bikes": "vehicles",
-    "dog": "animal", "dogs": "animals",
-    "cat": "animal", "cats": "animals",
-    "box": "container", "boxes": "containers",
-    "bag": "container", "bags": "containers",
-    "basket": "container", "baskets": "containers",
-    "bottle": "container", "bottles": "containers",
-}
-
 
 def entity_swap(problem: str, answer: float) -> dict[str, Any]:
     """
@@ -199,11 +178,65 @@ def entity_swap(problem: str, answer: float) -> dict[str, Any]:
     for name, label in label_map.items():
         text = re.sub(rf"\b{re.escape(name)}\b", label, text, flags=re.IGNORECASE)
 
-    # Replace objects (case-insensitive, whole-word)
-    for obj, neutral in _OBJECTS.items():
-        text = re.sub(rf"\b{re.escape(obj)}\b", neutral, text, flags=re.IGNORECASE)
+    # Group singular/plural pairs by category: assign Object_A, Object_B, …
+    # per distinct lemma in order of first appearance. Preserves the
+    # cardinality structure of multi-object problems (robots ≠ helmets ≠ footballs).
+    _PAIRS: list[tuple[str, str]] = [
+        ("apple", "apples"), ("orange", "oranges"), ("banana", "bananas"),
+        ("mango", "mangoes"), ("cookie", "cookies"), ("candy", "candies"),
+        ("cake", "cakes"), ("pie", "pies"),
+        ("marble", "marbles"), ("ball", "balls"), ("toy", "toys"),
+        ("card", "cards"), ("sticker", "stickers"),
+        ("book", "books"), ("pencil", "pencils"), ("pen", "pens"),
+        ("notebook", "notebooks"),
+        ("flower", "flowers"), ("tree", "trees"),
+        ("car", "cars"), ("bike", "bikes"),
+        ("dog", "dogs"), ("cat", "cats"),
+        ("box", "boxes"), ("bag", "bags"), ("basket", "baskets"),
+        ("bottle", "bottles"),
+        ("child", "children"), ("boy", "boys"), ("girl", "girls"),
+        ("man", "men"), ("woman", "women"),
+        ("student", "students"), ("teacher", "teachers"), ("friend", "friends"),
+        ("helmet", "helmets"), ("robot", "robots"), ("football", "footballs"),
+        ("seat", "seats"), ("chair", "chairs"), ("table", "tables"),
+        ("shirt", "shirts"), ("shoe", "shoes"), ("hat", "hats"),
+        ("egg", "eggs"),
+        ("duck", "ducks"), ("chicken", "chickens"), ("cow", "cows"),
+        ("horse", "horses"), ("rabbit", "rabbits"), ("bird", "birds"),
+        ("dollar", "dollars"), ("cent", "cents"), ("coin", "coins"),
+    ]
+
+    # Find first occurrence index for each lemma that actually appears
+    first_pos: list[tuple[int, str, str]] = []
+    for sing, plur in _PAIRS:
+        m_sing = re.search(rf"\b{re.escape(sing)}\b", text, re.IGNORECASE)
+        m_plur = re.search(rf"\b{re.escape(plur)}\b", text, re.IGNORECASE)
+        positions = [m.start() for m in (m_sing, m_plur) if m is not None]
+        if positions:
+            first_pos.append((min(positions), sing, plur))
+
+    first_pos.sort(key=lambda t: t[0])
+    obj_counter = 0
+    for _, sing, plur in first_pos:
+        tag = f"Object_{chr(65 + obj_counter)}"
+        text = re.sub(rf"\b{re.escape(plur)}\b", f"{tag}s", text, flags=re.IGNORECASE)
+        text = re.sub(rf"\b{re.escape(sing)}\b", tag, text, flags=re.IGNORECASE)
+        obj_counter += 1
 
     changed = text != problem
+    if not changed:
+        return {
+            "type": "entity_swap",
+            "label": "Entity Swap",
+            "description": "No swappable entities found — variant identical to original",
+            "variant": text,
+            "answer": None,
+            "entities_replaced": [],
+            "reliable": False,
+            "scoreable": False,
+            "changed": False,
+            "reliability_reason": "no name or object noun matched dictionaries",
+        }
     return {
         "type": "entity_swap",
         "label": "Entity Swap",
@@ -213,7 +246,7 @@ def entity_swap(problem: str, answer: float) -> dict[str, Any]:
         "entities_replaced": list(label_map.keys()),
         "reliable": True,
         "scoreable": True,
-        "changed": changed,
+        "changed": True,
     }
 
 
@@ -264,7 +297,19 @@ _GIVE_TO_GET: dict[str, str] = {
     "distributed": "collected",
 }
 
-_GET_TO_GIVE: dict[str, str] = {v: k for k, v in _GIVE_TO_GET.items()}
+# Hand-tuned for natural language (don't auto-invert _GIVE_TO_GET; e.g.
+# "bought → ate" reads worse than "bought → sold")
+_GET_TO_GIVE: dict[str, str] = {
+    "received": "gave", "receive": "give", "receives": "gives",
+    "bought":   "sold", "buy":     "sell", "buys":     "sells",
+    "got":      "gave", "get":     "give", "gets":     "gives",
+    "found":    "lost", "find":    "lose", "finds":    "loses",
+    "earned":   "spent", "earn":   "spend", "earns":   "spends",
+    "gained":   "lost", "gain":    "lose",
+    "added":    "removed", "add":  "remove", "adds":   "removes",
+    "collected": "distributed",
+    "acquired":  "sold",
+}
 
 
 def _try_detect_sub_pattern(
@@ -316,6 +361,12 @@ def structural_swap(problem: str, answer: float, seed: int | None = None) -> dic
                 lambda m: _GIVE_TO_GET.get(m.group(1).lower(), m.group(1)),
                 problem,
             )
+            # Direction flip: "gave X to Mary" → "received X from Mary"
+            new_text = re.sub(
+                r"\bto\s+([A-Z][a-zA-Z]+)\b",
+                r"from \1",
+                new_text,
+            )
             # Swap "how many * left" → "how many * in total"
             new_text = re.sub(
                 r"\bhow (many|much)\b(.*?)\bleft\b",
@@ -343,6 +394,12 @@ def structural_swap(problem: str, answer: float, seed: int | None = None) -> dic
             new_text = _GET_VERB_RE.sub(
                 lambda m: _GET_TO_GIVE.get(m.group(1).lower(), m.group(1)),
                 problem,
+            )
+            # Direction flip: "received X from Mary" → "gave X to Mary"
+            new_text = re.sub(
+                r"\bfrom\s+([A-Z][a-zA-Z]+)\b",
+                r"to \1",
+                new_text,
             )
             new_text = re.sub(
                 r"\bhow (many|much)\b(.*?)\bin total\b",

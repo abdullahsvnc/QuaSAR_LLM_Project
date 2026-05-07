@@ -44,7 +44,7 @@ export default function App() {
             flexShrink:   0,
           }} />
           <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 500, fontSize: 13 }}>QuaSAR Lab</span>
-          <span className="label" style={{ marginLeft: 2 }}>NLP · 2025</span>
+          <span className="label" style={{ marginLeft: 2 }}>LLM · 2026</span>
         </div>
 
         {/* Tabs */}
