@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import time
 import uuid
 from pathlib import Path
@@ -98,6 +99,9 @@ def _client_for(model_name: str) -> AsyncOpenAI:
 
 RESULTS_DIR = Path("./results")
 RESULTS_DIR.mkdir(exist_ok=True)
+
+ADVERSARIAL_DIR = RESULTS_DIR / "adversarial"
+ADVERSARIAL_DIR.mkdir(exist_ok=True)
 
 COMPARE_DIR = Path("./compare_results")
 COMPARE_DIR.mkdir(exist_ok=True)
@@ -466,8 +470,33 @@ async def adversarial_batch(req: AdversarialBatchRequest) -> dict[str, Any]:
          per-method `avg_drop_pp` = original_acc - mean(perturbed_acc).
 
     This is the GSM-Symbolic-style robustness analog of the paper's Table 4.
+
+    Cache: if a prior run with the same (model, n, seed, split, methods, types,
+    prompt_version) is found in `results/adversarial/`, return it instead of
+    re-running.
     """
     mdl = req.model or MODEL
+
+    cache_key = {
+        "model": mdl, "n": req.n, "split": req.split, "seed": req.seed,
+        "methods": list(req.methods), "types": list(req.types),
+        "prompt_version": response_cache.PROMPT_VERSION,
+    }
+    for path in sorted(ADVERSARIAL_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            cached = json.loads(path.read_text())
+        except Exception:
+            continue
+        cfg = cached.get("config", {})
+        if all(cfg.get(k) == v for k, v in cache_key.items()):
+            return {
+                "run_id": cached.get("run_id"),
+                "method_robustness": cached.get("method_robustness"),
+                "n_scoreable_per_type": cached.get("n_scoreable_per_type"),
+                "n_problems": len(cached.get("problems", [])),
+                "from_cache": True,
+                "cached_path": str(path.name),
+            }
 
     try:
         problems = load_problems(split=req.split, n=req.n, seed=req.seed)
@@ -578,7 +607,12 @@ async def adversarial_batch(req: AdversarialBatchRequest) -> dict[str, Any]:
         "problems": list(rows),
         "timestamp": time.time(),
     }
-    (RESULTS_DIR / f"{run_id}.json").write_text(json.dumps(payload, indent=2))
+    serialized = json.dumps(payload, indent=2)
+    (RESULTS_DIR / f"{run_id}.json").write_text(serialized)
+
+    ts = time.strftime("%Y%m%d_%H%M%S", time.localtime(payload["timestamp"]))
+    model_slug = re.sub(r"[^A-Za-z0-9._-]+", "_", mdl)
+    (ADVERSARIAL_DIR / f"adv_{ts}_{model_slug}_n{req.n}_{run_id}.json").write_text(serialized)
 
     return {
         "run_id": run_id,

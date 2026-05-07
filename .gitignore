@@ -58,7 +58,8 @@ dist/
 
 # ── Runtime / Data ────────────────────────────────────────────────────────────
 # QuaSAR run results & cache (potentially large / sensitive)
-backend/results/
+backend/results/*
+!backend/results/adversarial/
 backend/compare_results/
 backend/cache/
 
