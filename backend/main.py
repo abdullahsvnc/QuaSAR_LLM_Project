@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import time
 import uuid
 from pathlib import Path
@@ -56,23 +57,38 @@ FAST_MODEL = os.getenv("FAST_MODEL", "gpt-4o-mini")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 
 _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 _gemini_client = AsyncOpenAI(api_key=GEMINI_API_KEY or "missing", base_url=_GEMINI_BASE) if GEMINI_API_KEY else None
 _openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+# Ollama exposes an OpenAI-compatible API at :11434/v1. Always available
+# (model loading is lazy on the daemon side); errors surface at call time.
+_ollama_client = AsyncOpenAI(api_key="ollama", base_url=OLLAMA_BASE_URL)
 
 
 def _provider_for(model_name: str) -> str:
     m = model_name.lower()
+    if m.startswith(("ollama/", "local/")):
+        return "ollama"
     if m.startswith("gemini"):
         return "gemini"
     # gpt-*, o*, chatgpt-* all live on the OpenAI endpoint
     return "openai"
 
 
+def _bare_model_id(model_name: str) -> str:
+    """Strip provider prefix before sending to the API (`ollama/llama3.1:8b` → `llama3.1:8b`)."""
+    if "/" in model_name and model_name.split("/", 1)[0].lower() in ("ollama", "local"):
+        return model_name.split("/", 1)[1]
+    return model_name
+
+
 def _client_for(model_name: str) -> AsyncOpenAI:
     provider = _provider_for(model_name)
+    if provider == "ollama":
+        return _ollama_client
     if provider == "gemini":
         if _gemini_client is None:
             raise HTTPException(500, "GEMINI_API_KEY is not set in backend/.env")
@@ -84,8 +100,19 @@ def _client_for(model_name: str) -> AsyncOpenAI:
 RESULTS_DIR = Path("./results")
 RESULTS_DIR.mkdir(exist_ok=True)
 
+ADVERSARIAL_DIR = RESULTS_DIR / "adversarial"
+ADVERSARIAL_DIR.mkdir(exist_ok=True)
+
 COMPARE_DIR = Path("./compare_results")
 COMPARE_DIR.mkdir(exist_ok=True)
+
+MOCK_DIR = Path("./mocks")
+MOCK_DIR.mkdir(exist_ok=True)
+
+
+def _ablation_mock_path(model: str, n: int, seed: int, include_sap: bool, split: str) -> Path:
+    safe_model = model.replace("/", "_").replace(":", "-")
+    return MOCK_DIR / f"ablation_{safe_model}_{split}_n{n}_seed{seed}_sap{int(include_sap)}.json"
 
 app = FastAPI(title="QuaSAR Ablation Lab", version="2.0.0")
 app.add_middleware(
@@ -117,27 +144,48 @@ class AdversarialRequest(BaseModel):
     types: list[str] = ["numerical_swap", "entity_swap", "structural_swap"]
     model: str | None = None
 
+class AdversarialBatchRequest(BaseModel):
+    n: int = 30
+    split: str = "test"
+    seed: int = 42
+    methods: list[str] = ["standard", "zeroshotcot", "cot", "quasar"]
+    types: list[str] = ["numerical_swap", "entity_swap", "structural_swap"]
+    model: str | None = None
+
 class AblationRequest(BaseModel):
     n: int = 20
     split: str = "test"
     seed: int = 42
     include_sap: bool = True
     model: str | None = None
+    # Replay/save fixture: skip LLM if a mock matching (model, n, seed, sap, split)
+    # exists; otherwise run normally and persist the result as a mock for next time.
+    use_mock: bool = False
 
 # ── Core inference ────────────────────────────────────────────────────────────
 
-# QuaSAR prompts enumerate 1–4 stage headers so they need more output budget
-# than a plain standard/CoT prompt. Standard baselines keep a smaller budget.
-_MAX_TOKENS_QUASAR   = 1400
-_MAX_TOKENS_BASELINE = 700
+# Token budgets. QuaSAR's full 4-stage output is verbose: predicates,
+# formalisation, step-by-step explanation, then the final answer. Paper
+# Appendix I uses max_tokens=3500. Truncation mid-Explanation silently
+# corrupts the answer, so we match the paper here. Baselines get a
+# smaller (but still generous) budget.
+_MAX_TOKENS_QUASAR   = 3500
+_MAX_TOKENS_BASELINE = 1024
 
 _RETRY_ATTEMPTS = 4
 _RETRY_BASE_DELAY = 1.5  # seconds; doubles each attempt
 
-# Cap the number of in-flight Gemini requests regardless of which endpoint
-# dispatched them. Free-tier keys have aggressive per-minute quotas and this
-# is the simplest way to stay under them without coupling endpoints.
-_GLOBAL_API_SEM = asyncio.Semaphore(4)
+# Per-provider concurrency caps. Free-tier API keys have aggressive
+# per-minute quotas; local Ollama is GPU-bound and goes serial.
+_PROVIDER_SEMS: dict[str, asyncio.Semaphore] = {
+    "openai": asyncio.Semaphore(4),
+    "gemini": asyncio.Semaphore(4),
+    "ollama": asyncio.Semaphore(1),
+}
+
+
+def _sem_for(model_name: str) -> asyncio.Semaphore:
+    return _PROVIDER_SEMS[_provider_for(model_name)]
 
 
 def _max_tokens_for(method_id: str) -> int:
@@ -155,14 +203,16 @@ async def run_single(method_id: str, problem: str, mdl: str) -> dict[str, Any]:
     t0 = time.perf_counter()
 
     client = _client_for(mdl)
+    api_model = _bare_model_id(mdl)
+    sem = _sem_for(mdl)
 
     last_err: BaseException | None = None
     resp = None
     for attempt in range(_RETRY_ATTEMPTS):
         try:
-            async with _GLOBAL_API_SEM:
+            async with sem:
                 resp = await client.chat.completions.create(
-                    model=mdl,
+                    model=api_model,
                     messages=messages,  # type: ignore[arg-type]
                     max_tokens=_max_tokens_for(method_id),
                     temperature=0,
@@ -187,7 +237,12 @@ async def run_single(method_id: str, problem: str, mdl: str) -> dict[str, Any]:
 
     extracted = extract_answer(text)
     if extracted is None and text:
-        extracted = await extract_answer_via_llm(text, _client_for(FAST_MODEL), FAST_MODEL)
+        # Reuse the active model for the extraction fallback. Avoids a
+        # provider switch (e.g. qwen → OpenAI gpt-4o-mini) and keeps every
+        # POST on the same concurrency lane. For Ollama runs this means the
+        # fallback is serial with the main call but at least costs nothing.
+        async with sem:
+            extracted = await extract_answer_via_llm(text, client, api_model)
 
     result: dict[str, Any] = {
         "method_id": method_id,
@@ -221,6 +276,7 @@ def cache_stats() -> dict[str, int]:
 
 @app.get("/api/gsm8k/sample")
 def gsm8k_sample(n: int = 5, split: str = "test", seed: int | None = None) -> dict[str, Any]:
+    """Truly random by default. Pass seed=42 for reproducible sampling."""
     try:
         problems = load_problems(split=split, n=n, seed=seed)
         return {"problems": problems, "total": len(problems)}
@@ -319,7 +375,12 @@ async def batch_evaluate(req: BatchRequest) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "run_id": run_id,
         "type": "batch",
-        "config": {"model": mdl, "n": req.n, "split": req.split, "seed": req.seed, "methods": req.methods},
+        "config": {
+            "model": mdl, "n": req.n, "split": req.split, "seed": req.seed,
+            "methods": req.methods,
+            "prompt_version": response_cache.PROMPT_VERSION,
+            "provider": _provider_for(mdl),
+        },
         "accuracy": accuracy,
         "mcnemar": mcnemar,
         "problems": list(all_results),
@@ -332,7 +393,12 @@ async def batch_evaluate(req: BatchRequest) -> dict[str, Any]:
 
 @app.post("/api/adversarial")
 async def adversarial_evaluate(req: AdversarialRequest) -> dict[str, Any]:
-    """Algorithmic adversarial suite — zero LLM calls for variant generation."""
+    """Algorithmic adversarial suite — zero LLM calls for variant generation.
+
+    Variants without a derivable ground-truth answer (scoreable=False) are
+    still run through the LLM so the user can inspect outputs, but they are
+    excluded from accuracy aggregation — `correct` is set to None for them.
+    """
     mdl = req.model or MODEL
 
     # Generate variants algorithmically (no LLM cost)
@@ -343,9 +409,18 @@ async def adversarial_evaluate(req: AdversarialRequest) -> dict[str, Any]:
     )
 
     all_problems: list[dict[str, Any]] = [
-        {"type": "original", "label": "Original", "problem": req.problem, "answer": req.answer}
+        {
+            "type": "original", "label": "Original",
+            "problem": req.problem, "answer": req.answer,
+            "scoreable": True, "reliability_reason": None,
+        }
     ] + [
-        {"type": v["type"], "label": v["label"], "problem": v["variant"], "answer": v["answer"]}
+        {
+            "type": v["type"], "label": v["label"],
+            "problem": v["variant"], "answer": v.get("answer"),
+            "scoreable": bool(v.get("scoreable", v.get("reliable", False))),
+            "reliability_reason": v.get("reliability_reason"),
+        }
         for v in variants
     ]
 
@@ -360,17 +435,22 @@ async def adversarial_evaluate(req: AdversarialRequest) -> dict[str, Any]:
                 "label": prob_meta["label"],
                 "problem": prob_meta["problem"],
                 "ground_truth": prob_meta["answer"],
+                "scoreable": prob_meta["scoreable"],
+                "reliability_reason": prob_meta["reliability_reason"],
                 "methods": {},
             }
             for mid, r in zip(req.methods, method_results):
                 if isinstance(r, BaseException):
                     out["methods"][mid] = {
                         "method_id": mid, "error": str(r),
-                        "text": None, "extracted_answer": None, "correct": False,
+                        "text": None, "extracted_answer": None, "correct": None,
                     }
                     continue
                 rd = dict(r)
-                rd["correct"] = is_correct(rd.get("extracted_answer"), prob_meta["answer"])
+                if prob_meta["scoreable"] and prob_meta["answer"] is not None:
+                    rd["correct"] = is_correct(rd.get("extracted_answer"), prob_meta["answer"])
+                else:
+                    rd["correct"] = None
                 out["methods"][rd["method_id"]] = rd
             return out
 
@@ -380,6 +460,170 @@ async def adversarial_evaluate(req: AdversarialRequest) -> dict[str, Any]:
         "variants": variants,
         "evaluation": list(eval_results),
         "model": mdl,
+    }
+
+
+@app.post("/api/adversarial/batch")
+async def adversarial_batch(req: AdversarialBatchRequest) -> dict[str, Any]:
+    """Aggregate robustness over N GSM8K problems × methods × perturbation types.
+
+    For each sampled problem we:
+      1. Generate algorithmic perturbations (numerical_swap, entity_swap,
+         structural_swap) via `generate_all_variants` — zero LLM calls.
+      2. Run each method on the original AND each scoreable perturbation.
+      3. Aggregate accuracy per method × variant_type and compute the
+         per-method `avg_drop_pp` = original_acc - mean(perturbed_acc).
+
+    This is the GSM-Symbolic-style robustness analog of the paper's Table 4.
+
+    Cache: if a prior run with the same (model, n, seed, split, methods, types,
+    prompt_version) is found in `results/adversarial/`, return it instead of
+    re-running.
+    """
+    mdl = req.model or MODEL
+
+    cache_key = {
+        "model": mdl, "n": req.n, "split": req.split, "seed": req.seed,
+        "methods": list(req.methods), "types": list(req.types),
+        "prompt_version": response_cache.PROMPT_VERSION,
+    }
+    for path in sorted(ADVERSARIAL_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            cached = json.loads(path.read_text())
+        except Exception:
+            continue
+        cfg = cached.get("config", {})
+        if all(cfg.get(k) == v for k, v in cache_key.items()):
+            return {
+                "run_id": cached.get("run_id"),
+                "method_robustness": cached.get("method_robustness"),
+                "n_scoreable_per_type": cached.get("n_scoreable_per_type"),
+                "n_problems": len(cached.get("problems", [])),
+                "from_cache": True,
+                "cached_path": str(path.name),
+            }
+
+    try:
+        problems = load_problems(split=req.split, n=req.n, seed=req.seed)
+    except Exception as e:
+        raise HTTPException(500, f"Failed to load GSM8K: {e}")
+
+    sem = asyncio.Semaphore(2)
+
+    async def run_one(prob: dict[str, Any]) -> dict[str, Any]:
+        """Build (original + each scoreable variant) and evaluate every method on each."""
+        gt = prob["numeric_answer"]
+        variants = generate_all_variants(
+            problem=prob["question"], answer=gt, types=req.types,
+        )
+        # per-variant blocks: type label + text + ground truth + scoreable flag
+        all_variants: list[dict[str, Any]] = [{
+            "type": "original", "text": prob["question"], "answer": gt, "scoreable": True,
+        }]
+        for v in variants:
+            all_variants.append({
+                "type": v["type"],
+                "text":  v["variant"],
+                "answer": v.get("answer"),
+                "scoreable": bool(v.get("scoreable", v.get("reliable", False))),
+            })
+
+        async with sem:
+            tasks = [
+                run_single(m, var["text"], mdl)
+                for var in all_variants for m in req.methods
+            ]
+            method_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # walk back through (variant, method) order
+        per_variant: dict[str, dict[str, Any]] = {}
+        idx = 0
+        for var in all_variants:
+            mblock: dict[str, Any] = {}
+            for m in req.methods:
+                r = method_results[idx]; idx += 1
+                if isinstance(r, BaseException):
+                    mblock[m] = {"correct": None, "error": str(r)}
+                    continue
+                rd = dict(r)
+                if var["scoreable"] and var["answer"] is not None:
+                    rd["correct"] = is_correct(rd.get("extracted_answer"), var["answer"])
+                else:
+                    rd["correct"] = None
+                mblock[m] = rd
+            per_variant[var["type"]] = {
+                "scoreable": var["scoreable"],
+                "ground_truth": var["answer"],
+                "methods": mblock,
+            }
+
+        return {"problem_id": prob.get("id"), "question": prob["question"], "variants": per_variant}
+
+    rows = await asyncio.gather(*[run_one(p) for p in problems])
+
+    # Aggregate: for each method × variant_type, count correct/scoreable
+    variant_types = ["original"] + list(req.types)
+    method_robustness: dict[str, dict[str, Any]] = {}
+    n_scoreable: dict[str, int] = {t: 0 for t in variant_types}
+
+    # First pass: count scoreable problems per type
+    for row in rows:
+        for t in variant_types:
+            if t in row["variants"] and row["variants"][t]["scoreable"]:
+                n_scoreable[t] += 1
+
+    for m in req.methods:
+        per_type: dict[str, float | None] = {}
+        for t in variant_types:
+            correct = 0; total = 0
+            for row in rows:
+                v = row["variants"].get(t)
+                if not v or not v["scoreable"]:
+                    continue
+                c = v["methods"].get(m, {}).get("correct")
+                if c is None:
+                    continue
+                total += 1
+                correct += int(bool(c))
+            per_type[t] = round(correct / total, 4) if total else None
+
+        # avg drop = original - mean(perturbed accuracies that exist)
+        orig = per_type.get("original")
+        perturbed = [per_type[t] for t in req.types if per_type.get(t) is not None]
+        if orig is not None and perturbed:
+            avg_drop_pp = round(100 * (orig - sum(perturbed) / len(perturbed)), 2)
+        else:
+            avg_drop_pp = None
+
+        method_robustness[m] = {**per_type, "avg_drop_pp": avg_drop_pp}
+
+    run_id = str(uuid.uuid4())[:8]
+    payload: dict[str, Any] = {
+        "run_id": run_id,
+        "type": "adversarial_batch",
+        "config": {
+            "model": mdl, "n": req.n, "split": req.split, "seed": req.seed,
+            "methods": req.methods, "types": req.types,
+            "prompt_version": response_cache.PROMPT_VERSION,
+            "provider": _provider_for(mdl),
+        },
+        "method_robustness": method_robustness,
+        "n_scoreable_per_type": n_scoreable,
+        "problems": list(rows),
+        "timestamp": time.time(),
+    }
+    serialized = json.dumps(payload, indent=2)
+    (RESULTS_DIR / f"{run_id}.json").write_text(serialized)
+
+    ts = time.strftime("%Y%m%d_%H%M%S", time.localtime(payload["timestamp"]))
+    model_slug = re.sub(r"[^A-Za-z0-9._-]+", "_", mdl)
+    (ADVERSARIAL_DIR / f"adv_{ts}_{model_slug}_n{req.n}_{run_id}.json").write_text(serialized)
+
+    return {
+        "run_id": run_id,
+        "method_robustness": method_robustness,
+        "n_scoreable_per_type": n_scoreable,
+        "n_problems": len(rows),
     }
 
 
@@ -394,6 +638,18 @@ async def run_ablation(req: AblationRequest) -> dict[str, Any]:
     ablation_methods = list(ablation_method_ids())
     if req.include_sap:
         ablation_methods.append("quasar_sap")
+
+    mock_path = _ablation_mock_path(mdl, req.n, req.seed, req.include_sap, req.split)
+    if req.use_mock and mock_path.exists():
+        cached = json.loads(mock_path.read_text())
+        return {
+            "run_id": cached.get("run_id"),
+            "analysis": cached.get("analysis"),
+            "sap_delta": cached.get("sap_delta", {}),
+            "n_problems": len(cached.get("problems", [])),
+            "from_mock": True,
+            "mock_file": mock_path.name,
+        }
 
     try:
         problems = load_problems(split=req.split, n=req.n, seed=req.seed)
@@ -434,7 +690,12 @@ async def run_ablation(req: AblationRequest) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "run_id": run_id,
         "type": "ablation",
-        "config": {"model": mdl, "n": req.n, "split": req.split, "seed": req.seed},
+        "config": {
+            "model": mdl, "n": req.n, "split": req.split, "seed": req.seed,
+            "include_sap": req.include_sap,
+            "prompt_version": response_cache.PROMPT_VERSION,
+            "provider": _provider_for(mdl),
+        },
         "analysis": analysis,
         "sap_delta": sap_delta,
         "problems": list(all_results),
@@ -442,7 +703,50 @@ async def run_ablation(req: AblationRequest) -> dict[str, Any]:
     }
     (RESULTS_DIR / f"{run_id}.json").write_text(json.dumps(payload, indent=2))
 
-    return {"run_id": run_id, "analysis": analysis, "sap_delta": sap_delta, "n_problems": len(all_results)}
+    saved_mock = False
+    if req.use_mock:
+        mock_path.write_text(json.dumps(payload, indent=2))
+        saved_mock = True
+
+    return {
+        "run_id": run_id,
+        "analysis": analysis,
+        "sap_delta": sap_delta,
+        "n_problems": len(all_results),
+        "from_mock": False,
+        "mock_saved": saved_mock,
+        "mock_file": mock_path.name if saved_mock else None,
+    }
+
+
+@app.get("/api/ablation/mocks")
+def list_ablation_mocks() -> dict[str, list[dict[str, Any]]]:
+    """List saved ablation fixtures for replay."""
+    mocks: list[dict[str, Any]] = []
+    for f in sorted(MOCK_DIR.glob("ablation_*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
+        try:
+            data = json.loads(f.read_text())
+            mocks.append({
+                "file":      f.name,
+                "run_id":    data.get("run_id"),
+                "config":    data.get("config"),
+                "timestamp": data.get("timestamp"),
+                "n_problems": len(data.get("problems", [])),
+            })
+        except Exception:
+            pass
+    return {"mocks": mocks}
+
+
+@app.delete("/api/ablation/mocks/{name}")
+def delete_ablation_mock(name: str) -> dict[str, Any]:
+    if "/" in name or ".." in name or not name.startswith("ablation_"):
+        raise HTTPException(400, "invalid mock name")
+    path = MOCK_DIR / name
+    if not path.exists():
+        raise HTTPException(404, "not found")
+    path.unlink()
+    return {"deleted": name}
 
 
 @app.get("/api/results")

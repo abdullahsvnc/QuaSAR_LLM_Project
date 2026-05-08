@@ -83,86 +83,99 @@ STAGE_NAMES = {
     4: "ANSWERING",
 }
 
+# Paper-faithful stage instructions — verbatim from Ranaldi ACL 2025 Appendix A
+# Table 5. Verbose prose teaches the model formal-notation expectations explicitly,
+# which the prior compact bracketed wording did not. This is the prompt the paper
+# evaluated and reported numbers against.
 STAGE_INSTRUCTIONS: dict[int, str] = {
     1: (
-        "[STAGE 1 — ABSTRACTION]\n"
-        "Identify the abstract logical structure of the problem. "
-        "Replace specific numeric values and named entities with generic variables "
-        "(e.g. x, n, A, B). Name the type of mathematical operation(s) involved."
+        "1) Please consider the following question and exemplify the relevant "
+        "predicates, variables, and constants. Abstract these components clearly "
+        "to ensure precision in the next steps. Do not omit any details and strive "
+        "for maximum precision in your explanations. Refer to this step as "
+        "Abstraction (s1)."
     ),
     2: (
-        "[STAGE 2 — FORMALISATION]\n"
-        "Express the problem in formal mathematical notation. Define each variable "
-        "explicitly and write the equation(s) that encode the problem."
+        "2) For each predicate, variable and constant defined in s1, translate the "
+        "question in formal symbolic representation. Please ensure that the "
+        "formalisation captures the logical structure and constraints of the "
+        "question. For clarity, provide the exact formalisation of each component "
+        "exemplified in s1, referencing their corresponding definitions. Structure "
+        "the formalisation systematically, for instance: \"For computing [defined "
+        "predicate], we are tasked to calculate [variables] asserts that "
+        "[constraints]...\". Refer to this step as Formalisation (s2)."
     ),
     3: (
-        "[STAGE 3 — EXPLANATION]\n"
-        "Solve the equation(s) step by step. Justify each arithmetic or algebraic "
-        "transformation, working entirely in symbolic form where possible."
+        "3) Please consider the formalisation in s2 in detail, ensure this is "
+        "correct and solve the question by breaking down the steps operating a "
+        "symbolic representation. Combine variables, constants, and logical rules "
+        "systematically at each step to find the solution. For clarity, provide "
+        "clear reasoning for each step. Structure the explanation systematically, "
+        "for instance: \"Step 1: Calculate... Step 2:....\". Refer to this step "
+        "as Explanation (s3)."
     ),
     4: (
-        "[STAGE 4 — ANSWERING]\n"
-        "Substitute the original concrete values back into the symbolic solution. "
-        "State the final answer and verify it against the problem statement."
+        "4) In conclusion, behind explaining the steps supporting the final answer "
+        "to facilitate the final evaluation, extract the answer in a short and "
+        "concise format by marking it as \"The answer is: \". At this stage be "
+        "strict and concise and refer to this step as Answering (s4)."
     ),
 }
 
+# Paper §2.1.4 — final answer pattern is "The answer is: [number]".
 _FINAL_ANSWER_LINE = (
-    "After completing the requested stage(s), ALWAYS finish your response with the "
-    "final numeric answer on its own line prefixed with '#### '. This rule is "
-    "absolute — it applies even if a stage instruction tells you to defer computation."
+    "At the very end of your response state the final numeric answer on its own "
+    "line in the form: The answer is: N"
 )
 
 # ── SAP system prompt (our original contribution) ─────────────────────────────
 
-_SAP_SYSTEM = """\
-You are a mathematical reasoning engine operating under Structured Activation Priming (SAP).
+# SAP — original contribution. System-level priming variant: same 4 stages but
+# delivered as a persistent role rather than a step-by-step instruction list.
+_SAP_SYSTEM = (
+    "You are an experienced expert skilled in answering complex problems through "
+    "logical reasoning and structured analysis. You operate under Structured "
+    "Activation Priming (SAP): every response internally walks through (1) "
+    "abstracting predicates / variables / constants, (2) formalising in symbolic "
+    "notation, (3) explaining the solution step by step, (4) emitting a concise "
+    "final answer. " + _FINAL_ANSWER_LINE
+)
 
-SAP is a persistent inference-time prior that injects a quasi-symbolic reasoning layer \
-into every response. Before engaging with ANY problem, your internal representation \
-automatically:
-  1. ABSTRACTS    — strips surface content, retains the logical skeleton.
-  2. FORMALISES   — maps the skeleton to symbolic / algebraic notation.
-  3. EXPLAINS     — derives the solution via formal manipulation.
-  4. INSTANTIATES — binds concrete values back to the symbolic solution.
-
-This quasi-symbolic structure is ALWAYS active. It operates below explicit reasoning \
-and shapes every chain of thought you produce. Treat it as a structural prior, not \
-an instruction to follow literally.
-
-At the very end of your response write the final numeric answer on its own line \
-prefixed with '#### '."""
-
-# ── QuaSAR system prompt ───────────────────────────────────────────────────────
-
+# Minimal system prompt for QuaSAR. The paper's Appendix A template is a single
+# user-message block (#Role / #Task / #Steps / #Question), so we keep the
+# system role light and put the framework content in the user message.
 _QUASAR_SYSTEM = (
-    "You are a mathematical reasoning system implementing the QuaSAR framework "
-    "(Quasi-Symbolic Abstract Reasoning — Ranaldi, Valentino & Freitas, ACL 2025). "
-    "Perform exactly the stages requested by the user, in the order requested, using "
-    "the stage headers shown. "
-    + _FINAL_ANSWER_LINE
+    "You are an experienced expert skilled in answering complex problems through "
+    "logical reasoning and structured analysis."
 )
 
 
 def _quasar_user(problem: str, stages: tuple[int, ...]) -> str:
-    """Build the user prompt for any non-empty ordered subset of the 4 stages."""
+    """Build the user prompt for any non-empty ordered subset of the 4 stages.
+
+    Default (stages=(1,2,3,4)) reproduces Ranaldi ACL 2025 Appendix A Table 5
+    verbatim. Subsets are produced by slicing the #Steps block — used by the
+    cumulative / leave-one-out / isolated ablation variants.
+    """
     stages = tuple(sorted(set(stages)))
     if not stages or not all(1 <= s <= 4 for s in stages):
         raise ValueError(f"stages must be a non-empty subset of 1..4, got {stages}")
 
-    subset_repr = "{" + ", ".join(f"S{s}" for s in stages) + "}"
-    header = (
-        f'Solve the problem below using the QuaSAR pipeline restricted to the '
-        f'stage subset {subset_repr}. Execute only the listed stages; do not '
-        f'perform the others explicitly.\n\n'
-        f'PROBLEM:\n"{problem}"\n\n'
+    steps_block = "\n\n".join(STAGE_INSTRUCTIONS[s] for s in stages)
+
+    return (
+        "#Role\n"
+        "You are an experienced expert skilled in answering complex problems "
+        "through logical reasoning and structured analysis.\n\n"
+        "#Task\n"
+        "You are presented with a problem that requires logical reasoning and "
+        "systematic problem-solving. Please answer the question following these "
+        "steps rigorously.\n\n"
+        "#Steps\n"
+        f"{steps_block}\n\n"
+        "#Question\n"
+        f"{problem}"
     )
-    body = "\n\n".join(STAGE_INSTRUCTIONS[s] for s in stages)
-    footer = (
-        "\n\nREMINDER: regardless of which stages were requested, end your response "
-        "with the final numeric answer on its own line prefixed with '#### '."
-    )
-    return header + body + footer
 
 
 def _quasar_method(

@@ -1,6 +1,9 @@
 """
 Disk-based response cache.
-Key = SHA-256(method_id || problem || model)[:20]
+Key = SHA-256(PROMPT_VERSION || method_id || problem || model)[:20]
+
+Bump PROMPT_VERSION any time methods.py prompts change so old entries
+can never be served against a new prompt.
 """
 
 import hashlib
@@ -9,12 +12,14 @@ import time
 from pathlib import Path
 from typing import Any
 
+PROMPT_VERSION = "v3"
+
 CACHE_DIR = Path("./cache")
 CACHE_DIR.mkdir(exist_ok=True)
 
 
 def _key(method_id: str, problem: str, model: str) -> str:
-    raw = f"{method_id}\x00{problem}\x00{model}"
+    raw = f"{PROMPT_VERSION}\x00{method_id}\x00{problem}\x00{model}"
     return hashlib.sha256(raw.encode()).hexdigest()[:20]
 
 

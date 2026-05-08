@@ -26,7 +26,10 @@ export const api = {
   compare:     (body)                      => post('/compare', body),
   batch:       (body)                      => post('/batch', body),
   adversarial: (body)                      => post('/adversarial', body),
+  adversarialBatch: (body)                 => post('/adversarial/batch', body),
   runAblation: (body)                      => post('/ablation/run', body),
+  listMocks:   ()                          => get('/ablation/mocks'),
+  deleteMock:  (name)                      => fetch(BASE + `/ablation/mocks/${encodeURIComponent(name)}`, { method: 'DELETE' }).then(r => r.ok ? r.json() : Promise.reject(new Error(r.statusText))),
   listResults: ()                          => get('/results'),
   getResult:   (id)                        => get(`/results/${id}`),
 }

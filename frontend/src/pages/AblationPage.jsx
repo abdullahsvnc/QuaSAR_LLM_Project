@@ -12,6 +12,7 @@ const METHODS_PER_PROBLEM_SAP = 13 // + quasar_sap
 export default function AblationPage() {
   const [config,     setConfig]     = useState({ n: 20, split: 'test', seed: 42, model: DEFAULT_MODEL_FRONT })
   const [includeSAP, setIncludeSAP] = useState(true)
+  const [useMock,    setUseMock]    = useState(false)
   const [running,    setRunning]    = useState(false)
   const [result,     setResult]     = useState(null)
   const [error,      setError]      = useState(null)
@@ -25,6 +26,7 @@ export default function AblationPage() {
         seed:        config.seed,
         model:       config.model,
         include_sap: includeSAP,
+        use_mock:    useMock,
       })
       setResult(data)
     } catch (e) { setError(e.message) }
@@ -170,7 +172,7 @@ export default function AblationPage() {
           </label>
         </div>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, cursor: 'pointer' }}>
           <input type="checkbox" checked={includeSAP} onChange={e => setIncludeSAP(e.target.checked)} />
           <span style={{ fontSize: 12 }}>Include QuaSAR-SAP comparison</span>
           <span style={{
@@ -179,6 +181,19 @@ export default function AblationPage() {
             fontFamily: 'var(--font-mono)', fontWeight: 600, letterSpacing: '0.08em',
           }}>SAP</span>
           <span className="muted" style={{ fontSize: 11 }}>Original contribution — system-level quasi-symbolic priming</span>
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, cursor: 'pointer' }}>
+          <input type="checkbox" checked={useMock} onChange={e => setUseMock(e.target.checked)} />
+          <span style={{ fontSize: 12 }}>Use mock fixture (replay last run, no LLM)</span>
+          <span style={{
+            fontSize: 9, padding: '2px 7px', borderRadius: 3,
+            background: 'rgba(99,153,34,0.15)', color: '#639922',
+            fontFamily: 'var(--font-mono)', fontWeight: 600, letterSpacing: '0.08em',
+          }}>MOCK</span>
+          <span className="muted" style={{ fontSize: 11 }}>
+            Match key: model · n · seed · split · sap. First run saves fixture; reruns return saved data.
+          </span>
         </label>
 
         <p style={{ fontSize: 11, color: config.n >= 25 ? '#BA7517' : 'var(--text3)', marginBottom: 12 }}>
@@ -201,13 +216,27 @@ export default function AblationPage() {
 }
 
 function AblationResults({ result, includeSAP }) {
-  const { analysis, sap_delta, run_id, n_problems } = result
+  const { analysis, sap_delta, run_id, n_problems, from_mock, mock_saved, mock_file } = result
   if (!analysis) return null
 
-  const { per_stage, full_accuracy } = analysis
+  const { per_stage, full_accuracy, narrative_summary } = analysis
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {(from_mock || mock_saved) && (
+        <div style={{
+          fontSize: 11, padding: '8px 12px',
+          background: 'rgba(99,153,34,0.08)',
+          border: '1px solid rgba(99,153,34,0.25)',
+          borderRadius: 'var(--radius)', color: 'var(--text2)',
+        }}>
+          <strong style={{ color: '#639922' }}>
+            {from_mock ? 'Replayed from mock' : 'Saved as mock fixture'}
+          </strong>{' · '}
+          <code style={{ fontFamily: 'var(--font-mono)' }}>{mock_file}</code>
+          {from_mock && ' — no LLM calls were made'}
+        </div>
+      )}
       <div style={{ fontSize: 11, color: 'var(--text3)' }}>
         Run <code style={{ fontFamily: 'var(--font-mono)' }}>{run_id}</code> · {n_problems} problems ·
         full QuaSAR accuracy <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>
@@ -215,9 +244,11 @@ function AblationResults({ result, includeSAP }) {
         </strong> · saved to Dashboard
       </div>
 
-      <InterpretationGuide />
+      <InterpretationGuide narrative={narrative_summary} />
 
       <PerStageTable perStage={per_stage} />
+
+      <StageDemoPanel perStage={per_stage} />
 
       <ViewCards perStage={per_stage} view="loo" />
       <ViewCards perStage={per_stage} view="cumulative" />
@@ -232,12 +263,25 @@ function AblationResults({ result, includeSAP }) {
 
 /* ─── How to read results ──────────────────────────────────────────────── */
 
-function InterpretationGuide() {
+function InterpretationGuide({ narrative }) {
   return (
     <div style={{
       background: 'var(--bg2)', border: '1px solid var(--border)',
       borderRadius: 'var(--radius-lg)', padding: '12px 16px',
     }}>
+      {narrative && (
+        <div style={{
+          marginBottom: 12, padding: '10px 12px',
+          background: 'rgba(186,117,23,0.06)',
+          border: '1px solid rgba(186,117,23,0.18)',
+          borderRadius: 'var(--radius)',
+          fontSize: 12, lineHeight: 1.65, color: 'var(--text2)',
+          whiteSpace: 'pre-line',
+        }}>
+          <div className="label" style={{ marginBottom: 6, color: '#BA7517' }}>Auto-narrative — why these numbers</div>
+          {narrative}
+        </div>
+      )}
       <div className="label" style={{ marginBottom: 8 }}>How to read these results</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, fontSize: 11, lineHeight: 1.6 }}>
         <div>
@@ -286,7 +330,7 @@ function PerStageTable({ perStage }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr style={{ background: 'var(--bg3)' }}>
-            {['Stage', 'Cumulative acc', 'Cumulative Δ', 'LOO acc', 'LOO contribution Δ', 'Isolated acc'].map(h => (
+            {['Stage', 'Cumulative acc', 'Cumulative Δ', 'LOO acc', 'LOO contribution Δ', 'LOO p', 'Isolated acc'].map(h => (
               <th key={h} style={{
                 padding: '8px 16px', textAlign: 'left', fontSize: 10,
                 color: 'var(--text3)', fontWeight: 500,
@@ -307,12 +351,25 @@ function PerStageTable({ perStage }) {
                     fontSize: 9, fontWeight: 700,
                   }}>{s.stage}</div>
                   <span style={{ color: s.color, fontWeight: 500 }}>{s.name}</span>
+                  {s.divergence?.narrative && (
+                    <span
+                      title={s.divergence.narrative}
+                      style={{
+                        cursor: 'help',
+                        fontSize: 10, color: 'var(--text3)',
+                        border: '1px solid var(--border2)', borderRadius: '50%',
+                        width: 14, height: 14, display: 'inline-flex',
+                        alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >ⓘ</span>
+                  )}
                 </div>
               </td>
               <Pct value={s.cumulative_accuracy} />
               <Delta value={s.cumulative_marginal} />
               <Pct value={s.loo_accuracy} />
               <Delta value={s.loo_contribution} />
+              <PValue value={s.loo_p_value} significant={s.loo_significant} />
               <Pct value={s.isolated_accuracy} />
             </tr>
           ))}
@@ -326,6 +383,19 @@ function Pct({ value }) {
   return (
     <td style={{ padding: '10px 16px', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
       {(value * 100).toFixed(1)}%
+    </td>
+  )
+}
+
+function PValue({ value, significant }) {
+  if (value == null) {
+    return <td style={{ padding: '10px 16px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text3)' }}>—</td>
+  }
+  const color = significant ? '#639922' : 'var(--text3)'
+  const text = value >= 0.001 ? value.toFixed(4) : '<0.001'
+  return (
+    <td style={{ padding: '10px 16px', fontFamily: 'var(--font-mono)', fontSize: 12, color }}>
+      {text}{significant && ' ★'}
     </td>
   )
 }
@@ -414,6 +484,162 @@ function ViewCards({ perStage, view }) {
   )
 }
 
+/* ─── Stage demo panel — explains WHY each stage's number is what it is ── */
+
+function StageDemoPanel({ perStage }) {
+  const [active, setActive] = useState(0)
+  const [pairIdx, setPairIdx] = useState(0)
+
+  const stage = perStage[active]
+  const div = stage?.divergence
+  if (!div) return null
+
+  const pairs = div.sample_pairs || []
+  const pair = pairs[pairIdx % Math.max(pairs.length, 1)]
+
+  return (
+    <div style={{
+      background: 'var(--bg2)', border: '1px solid var(--border)',
+      borderRadius: 'var(--radius-lg)', overflow: 'hidden',
+    }}>
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+        <span className="label">Stage demo — full QuaSAR vs ¬Sk side-by-side</span>
+        <span className="muted" style={{ fontSize: 11, marginLeft: 8 }}>
+          Concrete LLM traces showing where removing a stage changed the answer.
+        </span>
+      </div>
+
+      {/* Tab strip — one per stage */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
+        {perStage.map((s, i) => {
+          const isActive = i === active
+          const dec = s.divergence?.decisive_count ?? 0
+          return (
+            <button
+              key={s.stage}
+              onClick={() => { setActive(i); setPairIdx(0) }}
+              style={{
+                flex: 1, padding: '10px 12px',
+                background: isActive ? `${s.color}14` : 'transparent',
+                border: 'none',
+                borderBottom: isActive ? `2px solid ${s.color}` : '2px solid transparent',
+                color: isActive ? s.color : 'var(--text2)',
+                fontSize: 12, fontWeight: isActive ? 600 : 400,
+                cursor: 'pointer', textAlign: 'left',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{
+                  width: 16, height: 16, borderRadius: 8,
+                  background: s.color, color: '#fff',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 9, fontWeight: 700,
+                }}>{s.stage}</span>
+                <span>{s.name}</span>
+                <span className="muted" style={{ fontSize: 10, marginLeft: 'auto' }}>
+                  {dec} decisive
+                </span>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+
+      <div style={{ padding: 16 }}>
+        {/* Narrative */}
+        <div style={{
+          padding: '10px 12px', marginBottom: 14,
+          background: `${stage.color}10`,
+          border: `1px solid ${stage.color}30`,
+          borderRadius: 'var(--radius)',
+          fontSize: 12, lineHeight: 1.6, color: 'var(--text2)',
+        }}>
+          {div.narrative}
+        </div>
+
+        {pairs.length === 0 ? (
+          <p className="muted" style={{ fontSize: 12 }}>
+            No decisive divergences for this stage in the current sample. Increase n to surface examples.
+          </p>
+        ) : (
+          <>
+            {/* Problem header */}
+            <div style={{ marginBottom: 10, fontSize: 12, lineHeight: 1.6 }}>
+              <div className="label" style={{ marginBottom: 4 }}>Problem #{pair.problem_id}</div>
+              <div style={{ color: 'var(--text2)' }}>{pair.question}</div>
+              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text3)' }}>
+                Ground truth <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{pair.ground_truth}</strong>
+                {' · '}full extracted <strong style={{ fontFamily: 'var(--font-mono)', color: '#639922' }}>{String(pair.full_answer)}</strong>
+                {' · '}LOO extracted <strong style={{ fontFamily: 'var(--font-mono)', color: '#E24B4A' }}>{String(pair.loo_answer)}</strong>
+                {pair.divergence_line >= 0 && (<> {' · '} first divergence at line {pair.divergence_line + 1}</>)}
+              </div>
+            </div>
+
+            {/* Side-by-side traces */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <DivergenceTrace
+                title="Full QuaSAR (S1-S4)"
+                color="#BA7517"
+                text={pair.full_text}
+                divergenceLine={pair.divergence_line}
+              />
+              <DivergenceTrace
+                title={`¬S${stage.stage} (drop ${stage.name})`}
+                color="#E24B4A"
+                text={pair.loo_text}
+                divergenceLine={pair.divergence_line}
+              />
+            </div>
+
+            {pairs.length > 1 && (
+              <button
+                onClick={() => setPairIdx(i => (i + 1) % pairs.length)}
+                style={{
+                  marginTop: 12, background: 'var(--bg3)',
+                  border: '1px solid var(--border2)', color: 'var(--text2)',
+                  fontSize: 11, padding: '6px 14px',
+                }}
+              >
+                Show next example ({((pairIdx + 1) % pairs.length) + 1}/{pairs.length})
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function DivergenceTrace({ title, color, text, divergenceLine }) {
+  const lines = (text || '—').split('\n')
+  return (
+    <div style={{
+      border: `1px solid ${color}28`, borderRadius: 'var(--radius)',
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        padding: '6px 10px', fontSize: 11, fontWeight: 500, color,
+        borderBottom: `1px solid ${color}20`, background: `${color}08`,
+      }}>{title}</div>
+      <div style={{ padding: 8, maxHeight: 360, overflowY: 'auto' }}>
+        <pre style={{
+          fontFamily: 'var(--font-mono)', fontSize: 10, lineHeight: 1.65,
+          margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+          color: 'var(--text2)',
+        }}>
+          {lines.map((ln, i) => (
+            <div key={i} style={{
+              background: i === divergenceLine ? 'rgba(226,75,74,0.12)' : 'transparent',
+              padding: i === divergenceLine ? '1px 4px' : '0 4px',
+              borderLeft: i === divergenceLine ? '2px solid #E24B4A' : '2px solid transparent',
+            }}>{ln || ' '}</div>
+          ))}
+        </pre>
+      </div>
+    </div>
+  )
+}
+
 /* ─── SAP delta panel ───────────────────────────────────────────────────── */
 
 function SapDelta({ sap_delta }) {
@@ -437,6 +663,14 @@ function SapDelta({ sap_delta }) {
           { label: 'Δ (SAP − QuaSAR)', value: `${sap_delta.delta >= 0 ? '+' : ''}${(sap_delta.delta * 100).toFixed(1)}pp`, color: sap_delta.delta >= 0 ? '#639922' : '#E24B4A' },
           { label: 'SAP-only wins',  value: `+${sap_delta.sap_wins}`,   color: '#639922' },
           { label: 'SAP-only losses', value: `-${sap_delta.sap_losses}`, color: '#E24B4A' },
+          {
+            label: 'McNemar p',
+            value: sap_delta.p_value == null
+              ? '—'
+              : (sap_delta.p_value >= 0.001 ? sap_delta.p_value.toFixed(4) : '<0.001')
+                + (sap_delta.significant ? ' ★' : ''),
+            color: sap_delta.significant ? '#639922' : 'var(--text3)',
+          },
         ].map(item => (
           <div key={item.label} style={{ flex: 1, background: 'var(--bg3)', borderRadius: 'var(--radius)', padding: '10px 12px' }}>
             <div className="label" style={{ marginBottom: 5 }}>{item.label}</div>
