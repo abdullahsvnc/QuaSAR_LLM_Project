@@ -237,7 +237,12 @@ async def run_single(method_id: str, problem: str, mdl: str) -> dict[str, Any]:
 
     extracted = extract_answer(text)
     if extracted is None and text:
-        extracted = await extract_answer_via_llm(text, _client_for(FAST_MODEL), FAST_MODEL)
+        # Reuse the active model for the extraction fallback. Avoids a
+        # provider switch (e.g. qwen → OpenAI gpt-4o-mini) and keeps every
+        # POST on the same concurrency lane. For Ollama runs this means the
+        # fallback is serial with the main call but at least costs nothing.
+        async with sem:
+            extracted = await extract_answer_via_llm(text, client, api_model)
 
     result: dict[str, Any] = {
         "method_id": method_id,
