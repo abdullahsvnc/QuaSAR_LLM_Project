@@ -418,39 +418,83 @@ def structural_swap(problem: str, answer: float, seed: int | None = None) -> dic
                 "scoreable": True,
             }
 
-    # Strategy C: perturb last number — but the new answer is NOT algebraically
-    # derivable from a simple scale, so emit text-only variant with answer=None.
+    # Strategy C: distractor injection (GSM-Symbolic Op-3 style) — insert
+    # numerically-loaded but logically irrelevant sentences before the question.
+    # Optionally shuffle middle clauses too. Answer unchanged. This is a strong
+    # perturbation: models often incorrectly fold the distractor numbers into
+    # the computation.
     rng = random.Random(seed if seed is not None else abs(hash(problem)) % 100_000)
-    factor = rng.choice([2, 3])
-    last_num_match = list(re.finditer(r"\b(\d+(?:\.\d+)?)\b", problem))
-    if last_num_match:
-        m = last_num_match[-1]
-        old_val = float(m.group())
-        new_val = old_val * factor
-        new_val_str = str(int(new_val)) if new_val == int(new_val) else str(round(new_val, 2))
-        new_text = problem[: m.start()] + new_val_str + problem[m.end():]
-        return {
-            "type": "structural_swap",
-            "label": "Structural Swap",
-            "description": f"Fallback perturbation only (last operand ×{factor}) — answer not algebraically derivable",
-            "variant": new_text,
-            "answer": None,
-            "operation_change": f"scale last operand ×{factor}",
-            "reliable": False,
-            "scoreable": False,
-            "reliability_reason": "no add/subtract pattern; fallback perturbation has no derivable answer",
-        }
+    sentences = re.findall(r"[^.!?]+[.!?]", problem.strip())
+    if len(sentences) >= 2:
+        q_idx = next((i for i, s in enumerate(sentences) if s.strip().endswith("?")), len(sentences) - 1)
+        head = sentences[0].strip()
+        question = sentences[q_idx].strip()
+        middle = [s.strip() for s in sentences[1:q_idx] + sentences[q_idx + 1:]]
+
+        # Pick distractor numbers unlikely to coincide with the answer.
+        pool = [11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]
+        try:
+            ans_int = int(answer)
+            pool = [n for n in pool if n != ans_int]
+        except (TypeError, ValueError):
+            pass
+        d1, d2 = rng.sample(pool, 2)
+
+        # On-topic noun lifted from problem if available, else generic.
+        noun_match = re.search(r"\b([a-z]{4,})s\b", problem.lower())
+        noun = noun_match.group(1) + "s" if noun_match else "items"
+
+        templates = [
+            f"In a different scenario, there were {d1} {noun}, but that situation is unrelated.",
+            f"A neighboring shop has {d1} similar {noun} in stock, though that does not affect this problem.",
+            f"Last year the count was {d1} {noun}, but that figure is no longer relevant.",
+            f"Note that {d1} {noun} were observed elsewhere, which is not part of the calculation.",
+        ]
+        distractor1 = rng.choice(templates)
+        distractor2 = (
+            f"Additionally, an unrelated batch of {d2} {noun} exists in another context."
+        )
+
+        # Shuffle middle clauses to compound the perturbation.
+        if len(middle) >= 2:
+            for _ in range(5):
+                shuffled = middle[:]
+                rng.shuffle(shuffled)
+                if shuffled != middle:
+                    middle = shuffled
+                    break
+
+        # Insert distractors at random positions among middle clauses.
+        body = middle[:]
+        if body:
+            body.insert(rng.randint(0, len(body)), distractor1)
+            body.insert(rng.randint(0, len(body)), distractor2)
+        else:
+            body = [distractor1, distractor2]
+
+        new_text = " ".join([head] + body + [question]).strip()
+        if new_text != problem:
+            return {
+                "type": "structural_swap",
+                "label": "Structural Swap",
+                "description": "Distractor injection (+ clause reorder) — irrelevant numerical clauses added; answer unchanged",
+                "variant": new_text,
+                "answer": answer,
+                "operation_change": "distractor injection + reorder",
+                "reliable": True,
+                "scoreable": True,
+            }
 
     return {
         "type": "structural_swap",
         "label": "Structural Swap",
-        "description": "No structural pattern detected — original returned",
+        "description": "Problem too short to inject distractors — original returned",
         "variant": problem,
         "answer": None,
         "operation_change": "none",
         "reliable": False,
         "scoreable": False,
-        "reliability_reason": "no add/subtract pattern detected",
+        "reliability_reason": "fewer than 2 sentences; cannot inject distractor",
     }
 
 

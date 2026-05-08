@@ -1,0 +1,640 @@
+{
+  "run_id": "ffef8ea2",
+  "type": "adversarial_batch",
+  "config": {
+    "model": "gpt-4o-mini",
+    "n": 3,
+    "split": "test",
+    "seed": 42,
+    "methods": [
+      "standard",
+      "zeroshotcot",
+      "cot",
+      "quasar"
+    ],
+    "types": [
+      "numerical_swap",
+      "entity_swap",
+      "structural_swap"
+    ],
+    "prompt_version": "v3",
+    "provider": "openai"
+  },
+  "method_robustness": {
+    "standard": {
+      "original": 1.0,
+      "numerical_swap": null,
+      "entity_swap": 1.0,
+      "structural_swap": 1.0,
+      "avg_drop_pp": 0.0
+    },
+    "zeroshotcot": {
+      "original": 1.0,
+      "numerical_swap": null,
+      "entity_swap": 1.0,
+      "structural_swap": 1.0,
+      "avg_drop_pp": 0.0
+    },
+    "cot": {
+      "original": 1.0,
+      "numerical_swap": null,
+      "entity_swap": 1.0,
+      "structural_swap": 1.0,
+      "avg_drop_pp": 0.0
+    },
+    "quasar": {
+      "original": 1.0,
+      "numerical_swap": null,
+      "entity_swap": 1.0,
+      "structural_swap": 1.0,
+      "avg_drop_pp": 0.0
+    }
+  },
+  "n_scoreable_per_type": {
+    "original": 3,
+    "numerical_swap": 0,
+    "entity_swap": 3,
+    "structural_swap": 3
+  },
+  "problems": [
+    {
+      "problem_id": 588,
+      "question": "Jared is trying to increase his typing speed. He starts with 47 words per minute (WPM). After some lessons the next time he tests his typing speed it has increased to 52 WPM. If he continues to increase his typing speed once more by 5 words, what will be the average of the three measurements?",
+      "variants": {
+        "original": {
+          "scoreable": true,
+          "ground_truth": 52.0,
+          "methods": {
+            "standard": {
+              "method_id": "standard",
+              "text": "To find the average of Jared's three typing speed measurements, we first need to determine the three speeds:\n\n1. Initial speed: 47 WPM\n2. After lessons: 52 WPM\n3. After another increase of 5 WPM: 52 WPM + 5 WPM = 57 WPM\n\nNow, we can calculate the average of these three speeds:\n\n\\[\n\\text{Average} = \\frac{\\text{Sum of speeds}}{\\text{Number of speeds}} = \\frac{47 + 52 + 57}{3}\n\\]\n\nCalculating the sum:\n\n\\[\n47 + 52 + 57 = 156\n\\]\n\nNow, we divide by the number of measurements (which is 3):\n\n\\[\n\\text{Average} = \\frac{156}{3} = 52\n\\]\n\nThus, the average of the three measurements is:\n\n#### 52",
+              "extracted_answer": 52.0,
+              "time_ms": 7394,
+              "tokens": 297,
+              "cache_hit": true,
+              "_cached_at": 1778192976.0952973,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "zeroshotcot": {
+              "method_id": "zeroshotcot",
+              "text": "To find the average of Jared's three typing speed measurements, we first need to identify the three speeds:\n\n1. Initial speed: 47 WPM\n2. After lessons: 52 WPM\n3. After further increase: 52 WPM + 5 WPM = 57 WPM\n\nNow we have the three speeds: 47 WPM, 52 WPM, and 57 WPM.\n\nNext, we calculate the average of these three speeds. The average is found by adding all the speeds together and then dividing by the number of measurements.\n\n1. Sum of the speeds:\n   \\( 47 + 52 + 57 = 156 \\)\n\n2. Number of measurements:\n   There are 3 measurements.\n\n3. Average calculation:\n   \\( \\text{Average} = \\frac{156}{3} = 52 \\)\n\nThus, the average of the three measurements is:\n\n#### 52",
+              "extracted_answer": 52.0,
+              "time_ms": 7003,
+              "tokens": 301,
+              "cache_hit": true,
+              "_cached_at": 1778192977.114236,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "cot": {
+              "method_id": "cot",
+              "text": "To find the average of Jared's typing speeds, we first need to identify the three measurements:\n\n1. Initial speed: 47 WPM\n2. After lessons: 52 WPM\n3. After another increase of 5 WPM: 52 + 5 = 57 WPM\n\nNow we have the three speeds: 47, 52, and 57. \n\nNext, we calculate the total of these speeds:\n\nTotal = 47 + 52 + 57\n\nCalculating this step-by-step:\n\n- 47 + 52 = 99\n- 99 + 57 = 156\n\nNow, we find the average by dividing the total by the number of measurements (which is 3):\n\nAverage = Total / Number of measurements = 156 / 3\n\nCalculating the average:\n\n156 \u00f7 3 = 52\n\nThus, the average of the three measurements is 52.\n\n#### 52",
+              "extracted_answer": 52.0,
+              "time_ms": 5369,
+              "tokens": 698,
+              "cache_hit": true,
+              "_cached_at": 1778192975.482893,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "quasar": {
+              "method_id": "quasar",
+              "text": "### Abstraction (s1)\n\n1. **Predicates**:\n   - \\( T(x) \\): Typing speed in words per minute (WPM) at measurement \\( x \\).\n   \n2. **Variables**:\n   - \\( T_1 \\): Initial typing speed (47 WPM).\n   - \\( T_2 \\): Typing speed after lessons (52 WPM).\n   - \\( T_3 \\): Typing speed after further increase (5 WPM increase from \\( T_2 \\)).\n   \n3. **Constants**:\n   - \\( C \\): The constant value of 5, representing the increase in WPM.\n\n### Formalisation (s2)\n\nTo compute the average typing speed over three measurements, we need to calculate the following:\n\n- **First Measurement**: \\( T_1 = 47 \\)\n- **Second Measurement**: \\( T_2 = 52 \\)\n- **Third Measurement**: \\( T_3 = T_2 + C = 52 + 5 = 57 \\)\n\nThe average typing speed \\( A \\) can be defined as:\n\\[\nA = \\frac{T_1 + T_2 + T_3}{3}\n\\]\n\n### Explanation (s3)\n\nStep 1: Calculate the third measurement \\( T_3 \\):\n\\[\nT_3 = T_2 + C = 52 + 5 = 57\n\\]\n\nStep 2: Sum the three measurements:\n\\[\nT_1 + T_2 + T_3 = 47 + 52 + 57\n\\]\n\nCalculating the sum:\n\\[\n47 + 52 = 99\n\\]\n\\[\n99 + 57 = 156\n\\]\n\nStep 3: Calculate the average \\( A \\):\n\\[\nA = \\frac{T_1 + T_2 + T_3}{3} = \\frac{156}{3} = 52\n\\]\n\n### Answering (s4)\n\nThe answer is: 52",
+              "extracted_answer": 52.0,
+              "time_ms": 11164,
+              "tokens": 868,
+              "cache_hit": true,
+              "_cached_at": 1778192981.279101,
+              "_cache_hit": true,
+              "correct": true
+            }
+          }
+        },
+        "numerical_swap": {
+          "scoreable": false,
+          "ground_truth": null,
+          "methods": {
+            "standard": {
+              "method_id": "standard",
+              "text": "To find the average of Jared's three typing speed measurements, we first need to list the speeds:\n\n1. Initial speed: 94 WPM\n2. After lessons: 104 WPM\n3. After another increase: 104 WPM + 10 WPM = 114 WPM\n\nNow, we can calculate the average of these three speeds:\n\n\\[\n\\text{Average} = \\frac{\\text{Sum of speeds}}{\\text{Number of measurements}} = \\frac{94 + 104 + 114}{3}\n\\]\n\nCalculating the sum:\n\n\\[\n94 + 104 + 114 = 312\n\\]\n\nNow, we divide by the number of measurements (which is 3):\n\n\\[\n\\text{Average} = \\frac{312}{3} = 104\n\\]\n\nThus, the average of the three measurements is:\n\n#### 104",
+              "extracted_answer": 104.0,
+              "time_ms": 5936,
+              "tokens": 291,
+              "cache_hit": false,
+              "correct": null
+            },
+            "zeroshotcot": {
+              "method_id": "zeroshotcot",
+              "text": "To find the average of Jared's three typing speed measurements, we first need to identify the three speeds:\n\n1. Initial speed: 94 WPM\n2. Speed after lessons: 104 WPM\n3. Speed after further increase: 104 WPM + 10 WPM = 114 WPM\n\nNow we have the three speeds: 94 WPM, 104 WPM, and 114 WPM.\n\nNext, we calculate the average of these three speeds. The average is found by adding all the speeds together and then dividing by the number of measurements (which is 3 in this case).\n\n1. Calculate the sum of the speeds:\n   \\( 94 + 104 + 114 = 312 \\)\n\n2. Divide the sum by the number of measurements:\n   \\( \\text{Average} = \\frac{312}{3} = 104 \\)\n\nThus, the average of the three measurements is:\n\n#### 104",
+              "extracted_answer": 104.0,
+              "time_ms": 8247,
+              "tokens": 306,
+              "cache_hit": false,
+              "correct": null
+            },
+            "cot": {
+              "method_id": "cot",
+              "text": "To find the average of Jared's typing speeds, we first need to determine the three measurements:\n\n1. Initial speed: 94 WPM\n2. After lessons: 104 WPM\n3. After another increase of 10 WPM: 104 + 10 = 114 WPM\n\nNow we have the three speeds: 94, 104, and 114. \n\nNext, we calculate the total of these three measurements:\n94 + 104 + 114 = 312\n\nTo find the average, we divide the total by the number of measurements (which is 3):\nAverage = Total / Number of Measurements = 312 / 3 = 104\n\nThus, the average of the three measurements is 104 WPM.\n\n#### 104",
+              "extracted_answer": 104.0,
+              "time_ms": 5132,
+              "tokens": 662,
+              "cache_hit": false,
+              "correct": null
+            },
+            "quasar": {
+              "method_id": "quasar",
+              "text": "### Abstraction (s1)\n\n1. **Predicates**:\n   - \\( \\text{InitialSpeed}(J) \\): Represents Jared's initial typing speed.\n   - \\( \\text{PostLessonSpeed}(J) \\): Represents Jared's typing speed after lessons.\n   - \\( \\text{FinalSpeed}(J) \\): Represents Jared's typing speed after the final increase.\n\n2. **Variables**:\n   - \\( W_1 \\): Initial typing speed (94 WPM).\n   - \\( W_2 \\): Typing speed after lessons (104 WPM).\n   - \\( W_3 \\): Typing speed after the final increase (104 WPM + 10 WPM).\n\n3. **Constants**:\n   - \\( C_1 = 94 \\): The constant value for the initial speed.\n   - \\( C_2 = 104 \\): The constant value for the speed after lessons.\n   - \\( C_3 = 10 \\): The constant value for the increase in speed.\n\n### Formalisation (s2)\n\nTo formalize the problem, we define the following:\n\n- \\( W_1 = C_1 = 94 \\)\n- \\( W_2 = C_2 = 104 \\)\n- \\( W_3 = W_2 + C_3 = 104 + 10 = 114 \\)\n\nWe need to calculate the average of the three measurements:\n\n\\[\n\\text{AverageSpeed}(J) = \\frac{W_1 + W_2 + W_3}{3}\n\\]\n\n### Explanation (s3)\n\nStep 1: Calculate \\( W_3 \\):\n\\[\nW_3 = W_2 + C_3 = 104 + 10 = 114\n\\]\n\nStep 2: Calculate the sum of the three speeds:\n\\[\n\\text{Sum} = W_1 + W_2 + W_3 = 94 + 104 + 114\n\\]\n\nCalculating the sum:\n\\[\n\\text{Sum} = 94 + 104 = 198\n\\]\n\\[\n\\text{Sum} = 198 + 114 = 312\n\\]\n\nStep 3: Calculate the average speed:\n\\[\n\\text{AverageSpeed}(J) = \\frac{\\text{Sum}}{3} = \\frac{312}{3}\n\\]\n\nCalculating the average:\n\\[\n\\text{AverageSpeed}(J) = 104\n\\]\n\n### Answering (s4)\n\nThe answer is: 104 WPM.",
+              "extracted_answer": 104.0,
+              "time_ms": 10341,
+              "tokens": 978,
+              "cache_hit": false,
+              "correct": null
+            }
+          }
+        },
+        "entity_swap": {
+          "scoreable": true,
+          "ground_truth": 52.0,
+          "methods": {
+            "standard": {
+              "method_id": "standard",
+              "text": "To find the average of the three measurements of Entity_A's typing speed, we first need to list the three speeds:\n\n1. Initial speed: 47 WPM\n2. After lessons: 52 WPM\n3. After further increase: 52 WPM + 5 WPM = 57 WPM\n\nNow, we can calculate the average of these three speeds:\n\n\\[\n\\text{Average} = \\frac{\\text{Sum of speeds}}{\\text{Number of speeds}} = \\frac{47 + 52 + 57}{3}\n\\]\n\nCalculating the sum:\n\n\\[\n47 + 52 + 57 = 156\n\\]\n\nNow, we divide by the number of measurements (which is 3):\n\n\\[\n\\text{Average} = \\frac{156}{3} = 52\n\\]\n\nThus, the average of the three measurements is:\n\n#### 52",
+              "extracted_answer": 52.0,
+              "time_ms": 16062,
+              "tokens": 295,
+              "cache_hit": true,
+              "_cached_at": 1778192986.1799498,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "zeroshotcot": {
+              "method_id": "zeroshotcot",
+              "text": "To find the average of the three measurements of Entity_A's typing speed, we first need to identify the three speeds:\n\n1. Initial speed: 47 WPM\n2. After lessons: 52 WPM\n3. After further increase: 52 WPM + 5 WPM = 57 WPM\n\nNow we have the three speeds: 47 WPM, 52 WPM, and 57 WPM.\n\nNext, we calculate the average of these three speeds. The formula for the average is:\n\n\\[\n\\text{Average} = \\frac{\\text{Sum of all measurements}}{\\text{Number of measurements}}\n\\]\n\nCalculating the sum of the three speeds:\n\n\\[\n47 + 52 + 57 = 156\n\\]\n\nNow, we divide this sum by the number of measurements, which is 3:\n\n\\[\n\\text{Average} = \\frac{156}{3} = 52\n\\]\n\nThus, the average of the three measurements is:\n\n#### 52",
+              "extracted_answer": 52.0,
+              "time_ms": 18141,
+              "tokens": 321,
+              "cache_hit": true,
+              "_cached_at": 1778192988.25952,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "cot": {
+              "method_id": "cot",
+              "text": "To find the average of the three measurements of Entity_A's typing speed, we first need to determine the three speeds:\n\n1. Initial speed: 47 WPM\n2. After lessons: 52 WPM\n3. After further increase: 52 + 5 = 57 WPM\n\nNow, we will calculate the average of these three speeds. The formula for the average is:\n\n\\[\n\\text{Average} = \\frac{\\text{Sum of all measurements}}{\\text{Number of measurements}}\n\\]\n\nCalculating the sum of the three speeds:\n\n\\[\n47 + 52 + 57 = 156\n\\]\n\nNow, we divide this sum by the number of measurements, which is 3:\n\n\\[\n\\text{Average} = \\frac{156}{3} = 52\n\\]\n\nThus, the average of the three measurements is 52 WPM.\n\n#### 52",
+              "extracted_answer": 52.0,
+              "time_ms": 15986,
+              "tokens": 694,
+              "cache_hit": true,
+              "_cached_at": 1778192986.1037588,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "quasar": {
+              "method_id": "quasar",
+              "text": "### Abstraction (s1)\n\n1. **Predicates**:\n   - \\( \\text{InitialSpeed}(A) \\): Represents the initial typing speed of Entity_A.\n   - \\( \\text{PostLessonSpeed}(A) \\): Represents the typing speed of Entity_A after lessons.\n   - \\( \\text{FinalSpeed}(A) \\): Represents the typing speed of Entity_A after the final increase.\n\n2. **Variables**:\n   - \\( S_1 \\): The initial speed of Entity_A (47 WPM).\n   - \\( S_2 \\): The speed after lessons (52 WPM).\n   - \\( S_3 \\): The final speed after the additional increase (52 WPM + 5 WPM).\n\n3. **Constants**:\n   - \\( C_1 = 47 \\): Initial speed in WPM.\n   - \\( C_2 = 52 \\): Speed after lessons in WPM.\n   - \\( C_3 = 5 \\): Additional increase in WPM.\n\n### Formalisation (s2)\n\nTo compute the average typing speed of Entity_A over three measurements, we need to calculate the final speed and then find the average of the three speeds.\n\n1. **Initial Speed**: \n   \\[\n   S_1 = C_1 = 47\n   \\]\n   \n2. **Post-Lesson Speed**: \n   \\[\n   S_2 = C_2 = 52\n   \\]\n\n3. **Final Speed**: \n   \\[\n   S_3 = S_2 + C_3 = 52 + 5 = 57\n   \\]\n\n4. **Average Speed Calculation**:\n   The average speed \\( A \\) is given by:\n   \\[\n   A = \\frac{S_1 + S_2 + S_3}{3}\n   \\]\n\n### Explanation (s3)\n\nStep 1: Calculate the final speed \\( S_3 \\):\n\\[\nS_3 = S_2 + C_3 = 52 + 5 = 57 \\text{ WPM}\n\\]\n\nStep 2: Calculate the average speed \\( A \\):\n\\[\nA = \\frac{S_1 + S_2 + S_3}{3} = \\frac{47 + 52 + 57}{3}\n\\]\n\nStep 3: Compute the sum of the speeds:\n\\[\n47 + 52 + 57 = 156\n\\]\n\nStep 4: Divide by 3 to find the average:\n\\[\nA = \\frac{156}{3} = 52\n\\]\n\n### Answering (s4)\n\nThe answer is: 52 WPM.",
+              "extracted_answer": 52.0,
+              "time_ms": 26891,
+              "tokens": 1008,
+              "cache_hit": true,
+              "_cached_at": 1778192997.0094638,
+              "_cache_hit": true,
+              "correct": true
+            }
+          }
+        },
+        "structural_swap": {
+          "scoreable": true,
+          "ground_truth": 52.0,
+          "methods": {
+            "standard": {
+              "method_id": "standard",
+              "text": "To find the average of Jared's three typing speed measurements, we first need to list the speeds:\n\n1. Initial speed: 47 WPM\n2. After lessons: 52 WPM\n3. After increasing by 5 WPM: 52 WPM + 5 WPM = 57 WPM\n\nNow, we can calculate the average of these three speeds:\n\n\\[\n\\text{Average} = \\frac{\\text{Sum of speeds}}{\\text{Number of measurements}} = \\frac{47 + 52 + 57}{3}\n\\]\n\nCalculating the sum:\n\n\\[\n47 + 52 + 57 = 156\n\\]\n\nNow, divide by the number of measurements (which is 3):\n\n\\[\n\\text{Average} = \\frac{156}{3} = 52\n\\]\n\nThus, the average of the three measurements is:\n\n#### 52",
+              "extracted_answer": 52.0,
+              "time_ms": 8637,
+              "tokens": 294,
+              "cache_hit": false,
+              "correct": true
+            },
+            "zeroshotcot": {
+              "method_id": "zeroshotcot",
+              "text": "To find the average of Jared's three typing speed measurements, we first need to identify the three speeds:\n\n1. Initial speed: 47 WPM\n2. After lessons: 52 WPM\n3. After further increase: 52 WPM + 5 WPM = 57 WPM\n\nNow we have the three speeds:\n- 47 WPM\n- 52 WPM\n- 57 WPM\n\nNext, we calculate the average of these three speeds. The average is calculated by summing the values and then dividing by the number of values.\n\nSum of the speeds:\n47 + 52 + 57 = 156\n\nNumber of measurements:\n3\n\nNow, we calculate the average:\nAverage = Total Sum / Number of Measurements\nAverage = 156 / 3 = 52\n\nThus, the average of the three measurements is:\n\n#### 52",
+              "extracted_answer": 52.0,
+              "time_ms": 9154,
+              "tokens": 291,
+              "cache_hit": false,
+              "correct": true
+            },
+            "cot": {
+              "method_id": "cot",
+              "text": "To find the average of Jared's three typing speed measurements, we first need to identify the three speeds:\n\n1. Initial speed: 47 WPM\n2. After lessons: 52 WPM\n3. After another increase of 5 WPM: 52 + 5 = 57 WPM\n\nNow, we can calculate the average of these three speeds. The formula for the average is:\n\n\\[\n\\text{Average} = \\frac{\\text{Sum of all measurements}}{\\text{Number of measurements}}\n\\]\n\nCalculating the sum of the three speeds:\n\n\\[\n47 + 52 + 57 = 156\n\\]\n\nNow, we divide this sum by the number of measurements, which is 3:\n\n\\[\n\\text{Average} = \\frac{156}{3} = 52\n\\]\n\nThus, the average of the three measurements is 52 WPM.\n\n#### 52",
+              "extracted_answer": 52.0,
+              "time_ms": 13169,
+              "tokens": 695,
+              "cache_hit": false,
+              "correct": true
+            },
+            "quasar": {
+              "method_id": "quasar",
+              "text": "### Abstraction (s1)\n\n1. **Predicates**:\n   - \\( \\text{IncreasedSpeed}(x) \\): Represents the typing speed after an increase.\n   - \\( \\text{Average}(a, b, c) \\): Represents the average of three values \\( a, b, c \\).\n\n2. **Variables**:\n   - \\( S_1 \\): Initial typing speed (47 WPM).\n   - \\( S_2 \\): Typing speed after lessons (52 WPM).\n   - \\( S_3 \\): Typing speed after another increase (5 WPM increase).\n\n3. **Constants**:\n   - \\( C_1 = 47 \\): Initial speed.\n   - \\( C_2 = 52 \\): Speed after lessons.\n   - \\( C_3 = C_2 + 5 = 57 \\): Speed after the next increase.\n\n### Formalisation (s2)\n\n1. **Initial Speed**: \n   - \\( S_1 = C_1 = 47 \\)\n\n2. **Speed After Lessons**: \n   - \\( S_2 = C_2 = 52 \\)\n\n3. **Speed After Next Increase**: \n   - \\( S_3 = C_3 = S_2 + 5 = 52 + 5 = 57 \\)\n\n4. **Average Calculation**:\n   - We need to compute the average of the three speeds:\n   \\[\n   \\text{Average}(S_1, S_2, S_3) = \\frac{S_1 + S_2 + S_3}{3}\n   \\]\n\n### Explanation (s3)\n\nStep 1: Calculate the values of \\( S_1 \\), \\( S_2 \\), and \\( S_3 \\):\n- \\( S_1 = 47 \\)\n- \\( S_2 = 52 \\)\n- \\( S_3 = 57 \\)\n\nStep 2: Compute the sum of the three speeds:\n\\[\nS_1 + S_2 + S_3 = 47 + 52 + 57\n\\]\nCalculating this gives:\n\\[\n47 + 52 = 99\n\\]\n\\[\n99 + 57 = 156\n\\]\n\nStep 3: Calculate the average:\n\\[\n\\text{Average}(S_1, S_2, S_3) = \\frac{156}{3} = 52\n\\]\n\n### Answering (s4)\n\nThe answer is: 52 WPM.",
+              "extracted_answer": 52.0,
+              "time_ms": 18139,
+              "tokens": 978,
+              "cache_hit": false,
+              "correct": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "problem_id": 1214,
+      "question": "Jordan has 2 children who wear diapers.  Each child requires 5 diaper changes per day.  Jordan's wife changes half of the diapers.  How many diapers does Jordan change per day?",
+      "variants": {
+        "original": {
+          "scoreable": true,
+          "ground_truth": 5.0,
+          "methods": {
+            "standard": {
+              "method_id": "standard",
+              "text": "First, we need to calculate the total number of diaper changes required for both children in a day. Each child requires 5 diaper changes per day, and there are 2 children:\n\nTotal diaper changes = Number of children \u00d7 Diaper changes per child\nTotal diaper changes = 2 \u00d7 5 = 10 diaper changes per day.\n\nJordan's wife changes half of the diapers. Therefore, the number of diaper changes she does is:\n\nDiapers changed by wife = Total diaper changes / 2\nDiapers changed by wife = 10 / 2 = 5 diaper changes.\n\nNow, to find out how many diapers Jordan changes, we subtract the number of diapers changed by his wife from the total number of diaper changes:\n\nDiapers changed by Jordan = Total diaper changes - Diapers changed by wife\nDiapers changed by Jordan = 10 - 5 = 5 diaper changes.\n\nThus, Jordan changes 5 diapers per day.\n\n#### 5",
+              "extracted_answer": 5.0,
+              "time_ms": 29327,
+              "tokens": 275,
+              "cache_hit": true,
+              "_cached_at": 1778192999.4458234,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "zeroshotcot": {
+              "method_id": "zeroshotcot",
+              "text": "To find out how many diapers Jordan changes per day, we can follow these steps:\n\n1. **Calculate the total number of diaper changes per day for both children**:\n   - Each child requires 5 diaper changes per day.\n   - Since Jordan has 2 children, the total number of diaper changes per day is:\n     \\[\n     2 \\text{ children} \\times 5 \\text{ diaper changes/child} = 10 \\text{ diaper changes}\n     \\]\n\n2. **Determine how many diapers Jordan's wife changes**:\n   - Jordan's wife changes half of the total diaper changes.\n   - Therefore, the number of diaper changes she does is:\n     \\[\n     \\frac{10 \\text{ diaper changes}}{2} = 5 \\text{ diaper changes}\n     \\]\n\n3. **Calculate how many diapers Jordan changes**:\n   - Since Jordan's wife changes 5 diapers, the number of diapers Jordan changes is the remaining half:\n     \\[\n     10 \\text{ total diaper changes} - 5 \\text{ diaper changes by wife} = 5 \\text{ diaper changes by Jordan}\n     \\]\n\nThus, Jordan changes 5 diapers per day.\n\n#### 5",
+              "extracted_answer": 5.0,
+              "time_ms": 30802,
+              "tokens": 338,
+              "cache_hit": true,
+              "_cached_at": 1778193000.920978,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "cot": {
+              "method_id": "cot",
+              "text": "First, we need to determine the total number of diaper changes required for both children. Each child requires 5 diaper changes per day, and there are 2 children:\n\nTotal diaper changes = 2 children \u00d7 5 changes/child = 10 changes per day.\n\nNext, we know that Jordan's wife changes half of the diapers. Therefore, the number of diaper changes that Jordan's wife does is:\n\nDiaper changes by wife = 10 changes \u00f7 2 = 5 changes.\n\nNow, to find out how many diapers Jordan changes, we subtract the number of changes his wife does from the total changes:\n\nDiapers changed by Jordan = Total changes - Diapers changed by wife = 10 - 5 = 5 changes.\n\nThus, Jordan changes 5 diapers per day.\n\n#### 5",
+              "extracted_answer": 5.0,
+              "time_ms": 30405,
+              "tokens": 644,
+              "cache_hit": true,
+              "_cached_at": 1778193000.5240233,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "quasar": {
+              "method_id": "quasar",
+              "text": "### Abstraction (s1)\n\n1. **Predicates**:\n   - \\( C(x) \\): \"x is a child of Jordan.\"\n   - \\( D(y) \\): \"y is a diaper change.\"\n   - \\( R(z) \\): \"z is the number of diaper changes required per child per day.\"\n\n2. **Variables**:\n   - \\( n \\): the number of children Jordan has.\n   - \\( d \\): the number of diaper changes required per child per day.\n   - \\( w \\): the fraction of diaper changes done by Jordan's wife.\n\n3. **Constants**:\n   - \\( n = 2 \\): Jordan has 2 children.\n   - \\( d = 5 \\): Each child requires 5 diaper changes per day.\n   - \\( w = 0.5 \\): Jordan's wife changes half of the diapers.\n\n### Formalisation (s2)\n\nTo compute the total number of diaper changes Jordan performs per day, we need to calculate the total number of diaper changes required for both children and then determine how many of those changes are done by Jordan.\n\n1. **Total Diaper Changes**:\n   \\[\n   T = n \\times d\n   \\]\n   where \\( T \\) is the total number of diaper changes per day.\n\n2. **Diaper Changes by Jordan**:\n   \\[\n   J = T \\times (1 - w)\n   \\]\n   where \\( J \\) is the number of diaper changes Jordan performs.\n\n### Explanation (s3)\n\nStep 1: Calculate the total number of diaper changes required per day.\n\\[\nT = n \\times d = 2 \\times 5 = 10\n\\]\nThus, the total number of diaper changes required per day is 10.\n\nStep 2: Calculate the number of diaper changes performed by Jordan.\nSince Jordan's wife changes half of the diapers, we can express this as:\n\\[\nJ = T \\times (1 - w) = 10 \\times (1 - 0.5) = 10 \\times 0.5 = 5\n\\]\nThus, Jordan changes 5 diapers per day.\n\n### Answering (s4)\n\nThe answer is: Jordan changes 5 diapers per day.",
+              "extracted_answer": 5.0,
+              "time_ms": 37954,
+              "tokens": 890,
+              "cache_hit": true,
+              "_cached_at": 1778193008.0749831,
+              "_cache_hit": true,
+              "correct": true
+            }
+          }
+        },
+        "numerical_swap": {
+          "scoreable": false,
+          "ground_truth": null,
+          "methods": {
+            "standard": {
+              "method_id": "standard",
+              "text": "First, we need to calculate the total number of diaper changes required for all 20 children in a day. Each child requires 50 diaper changes per day, so we can calculate the total as follows:\n\n\\[\n\\text{Total diaper changes} = \\text{Number of children} \\times \\text{Diaper changes per child}\n\\]\n\\[\n\\text{Total diaper changes} = 20 \\times 50 = 1000\n\\]\n\nNext, we know that Jordan's wife changes half of the diapers. Therefore, we can find out how many diapers she changes:\n\n\\[\n\\text{Diapers changed by wife} = \\frac{1}{2} \\times \\text{Total diaper changes}\n\\]\n\\[\n\\text{Diapers changed by wife} = \\frac{1}{2} \\times 1000 = 500\n\\]\n\nNow, to find out how many diapers Jordan changes, we subtract the number of diapers changed by his wife from the total number of diaper changes:\n\n\\[\n\\text{Diapers changed by Jordan} = \\text{Total diaper changes} - \\text{Diapers changed by wife}\n\\]\n\\[\n\\text{Diapers changed by Jordan} = 1000 - 500 = 500\n\\]\n\nThus, the number of diapers Jordan changes per day is:\n\n#### 500",
+              "extracted_answer": 500.0,
+              "time_ms": 15071,
+              "tokens": 361,
+              "cache_hit": false,
+              "correct": null
+            },
+            "zeroshotcot": {
+              "method_id": "zeroshotcot",
+              "text": "To find out how many diapers Jordan changes per day, we can follow these steps:\n\n1. **Calculate the total number of diaper changes per day for all children**:\n   - Each child requires 50 diaper changes per day.\n   - There are 20 children.\n   - Total diaper changes = Number of children \u00d7 Diaper changes per child\n   - Total diaper changes = 20 \u00d7 50 = 1000 diaper changes per day.\n\n2. **Determine how many diapers Jordan's wife changes**:\n   - Jordan's wife changes half of the total diaper changes.\n   - Diapers changed by wife = Total diaper changes / 2\n   - Diapers changed by wife = 1000 / 2 = 500 diaper changes.\n\n3. **Calculate how many diapers Jordan changes**:\n   - Since Jordan changes the other half of the diapers, we subtract the number of diapers changed by his wife from the total.\n   - Diapers changed by Jordan = Total diaper changes - Diapers changed by wife\n   - Diapers changed by Jordan = 1000 - 500 = 500 diaper changes.\n\nThus, the number of diapers Jordan changes per day is:\n\n#### 500",
+              "extracted_answer": 500.0,
+              "time_ms": 16111,
+              "tokens": 327,
+              "cache_hit": false,
+              "correct": null
+            },
+            "cot": {
+              "method_id": "cot",
+              "text": "First, we need to calculate the total number of diaper changes required for all 20 children. Each child requires 50 diaper changes per day, so we multiply the number of children by the number of changes per child:\n\n\\[\n20 \\text{ children} \\times 50 \\text{ changes/child} = 1000 \\text{ changes}\n\\]\n\nNext, since Jordan's wife changes half of the diapers, we need to find out how many changes she does:\n\n\\[\n\\frac{1000 \\text{ changes}}{2} = 500 \\text{ changes}\n\\]\n\nNow, to find out how many changes Jordan does, we subtract the number of changes his wife does from the total number of changes:\n\n\\[\n1000 \\text{ changes} - 500 \\text{ changes} = 500 \\text{ changes}\n\\]\n\nThus, Jordan changes 500 diapers per day.\n\n#### 500",
+              "extracted_answer": 500.0,
+              "time_ms": 16901,
+              "tokens": 670,
+              "cache_hit": false,
+              "correct": null
+            },
+            "quasar": {
+              "method_id": "quasar",
+              "text": "### Abstraction (s1)\n\n1. **Constants**:\n   - \\( C = 20 \\) (the number of children)\n   - \\( D = 50 \\) (the number of diaper changes required per child per day)\n\n2. **Variables**:\n   - \\( T \\) (total diaper changes per day)\n   - \\( J \\) (diaper changes done by Jordan)\n   - \\( W \\) (diaper changes done by Jordan's wife)\n\n3. **Predicates**:\n   - \\( \\text{TotalChanges}(C, D) \\): Represents the total number of diaper changes required for all children.\n   - \\( \\text{WifeChanges}(T) \\): Represents the number of diaper changes done by Jordan's wife, which is half of the total changes.\n   - \\( \\text{JordanChanges}(T, W) \\): Represents the number of diaper changes done by Jordan, which is the total changes minus the changes done by his wife.\n\n### Formalisation (s2)\n\n1. **Total Diaper Changes**:\n   \\[\n   T = C \\times D\n   \\]\n   This asserts that the total number of diaper changes is the product of the number of children and the number of changes per child.\n\n2. **Wife's Changes**:\n   \\[\n   W = \\frac{T}{2}\n   \\]\n   This asserts that Jordan's wife changes half of the total diaper changes.\n\n3. **Jordan's Changes**:\n   \\[\n   J = T - W\n   \\]\n   This asserts that the number of diaper changes done by Jordan is the total changes minus the changes done by his wife.\n\n### Explanation (s3)\n\n**Step 1**: Calculate the total number of diaper changes per day.\n\\[\nT = C \\times D = 20 \\times 50 = 1000\n\\]\nThus, the total number of diaper changes required per day is 1000.\n\n**Step 2**: Calculate the number of diaper changes done by Jordan's wife.\n\\[\nW = \\frac{T}{2} = \\frac{1000}{2} = 500\n\\]\nThus, Jordan's wife changes 500 diapers per day.\n\n**Step 3**: Calculate the number of diaper changes done by Jordan.\n\\[\nJ = T - W = 1000 - 500 = 500\n\\]\nThus, Jordan changes 500 diapers per day.\n\n### Answering (s4)\n\nThe answer is: Jordan changes 500 diapers per day.",
+              "extracted_answer": 500.0,
+              "time_ms": 24772,
+              "tokens": 952,
+              "cache_hit": false,
+              "correct": null
+            }
+          }
+        },
+        "entity_swap": {
+          "scoreable": true,
+          "ground_truth": 5.0,
+          "methods": {
+            "standard": {
+              "method_id": "standard",
+              "text": "First, we need to calculate the total number of diaper changes required for both Object_As.\n\nEach Object_A requires 5 diaper changes per day, and there are 2 Object_As:\n\nTotal diaper changes = 2 Object_As * 5 diaper changes/Object_A = 10 diaper changes per day.\n\nEntity_A's wife changes half of the diapers:\n\nDiapers changed by Entity_A's wife = 10 diaper changes / 2 = 5 diaper changes.\n\nNow, to find out how many diapers Entity_A changes, we subtract the number of diapers changed by his wife from the total number of diaper changes:\n\nDiapers changed by Entity_A = Total diaper changes - Diapers changed by wife\nDiapers changed by Entity_A = 10 - 5 = 5.\n\nThus, Entity_A changes 5 diapers per day.\n\n#### 5",
+              "extracted_answer": 5.0,
+              "time_ms": 44128,
+              "tokens": 256,
+              "cache_hit": true,
+              "_cached_at": 1778193014.2482245,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "zeroshotcot": {
+              "method_id": "zeroshotcot",
+              "text": "To find out how many diapers Entity_A changes per day, we can break down the problem step by step.\n\n1. **Determine the total number of diaper changes needed per day:**\n   - Each Object_A requires 5 diaper changes per day.\n   - There are 2 Object_As.\n   - Total diaper changes = Number of Object_As \u00d7 Diaper changes per Object_A\n   - Total diaper changes = 2 \u00d7 5 = 10 diaper changes per day.\n\n2. **Determine how many diapers Entity_A's wife changes:**\n   - Entity_A's wife changes half of the diapers.\n   - Diapers changed by wife = Total diaper changes / 2\n   - Diapers changed by wife = 10 / 2 = 5 diaper changes.\n\n3. **Determine how many diapers Entity_A changes:**\n   - Since Entity_A's wife changes 5 diapers, the remaining diapers are changed by Entity_A.\n   - Diapers changed by Entity_A = Total diaper changes - Diapers changed by wife\n   - Diapers changed by Entity_A = 10 - 5 = 5 diaper changes.\n\nThus, Entity_A changes 5 diapers per day.\n\n#### 5",
+              "extracted_answer": 5.0,
+              "time_ms": 41539,
+              "tokens": 333,
+              "cache_hit": true,
+              "_cached_at": 1778193011.6590812,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "cot": {
+              "method_id": "cot",
+              "text": "First, we need to determine the total number of diaper changes required for both Object_As. \n\nEach Object_A requires 5 diaper changes per day, and there are 2 Object_As:\nTotal diaper changes = 2 Object_As * 5 changes/Object_A = 10 changes per day.\n\nNext, we know that Entity_A's wife changes half of the diapers. Therefore, the number of diaper changes that Entity_A is responsible for is:\nDiapers changed by Entity_A = Total diaper changes / 2 = 10 / 2 = 5 changes per day.\n\nThus, Entity_A changes 5 diapers per day.\n\n#### 5",
+              "extracted_answer": 5.0,
+              "time_ms": 40456,
+              "tokens": 615,
+              "cache_hit": true,
+              "_cached_at": 1778193010.5763826,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "quasar": {
+              "method_id": "quasar",
+              "text": "### Abstraction (s1)\n\n1. **Predicates**:\n   - \\( W(x) \\): \"x wears a diaper.\"\n   - \\( C(x, d) \\): \"x changes d diapers.\"\n   - \\( R(x, n) \\): \"x requires n diaper changes per day.\"\n\n2. **Variables**:\n   - \\( E \\): Entity_A\n   - \\( O_1, O_2 \\): Object_A1 and Object_A2 (the two objects that wear diapers)\n   - \\( D \\): Total number of diaper changes required per day for both Object_As.\n   - \\( H \\): Number of diapers changed by Entity_A's wife.\n\n3. **Constants**:\n   - \\( n = 5 \\): Number of diaper changes required per Object_A per day.\n   - \\( m = 2 \\): Number of Object_As.\n\n### Formalisation (s2)\n\n1. **Total Diaper Changes Required**:\n   - For each Object_A, the number of diaper changes required per day is \\( R(O_i, n) \\) where \\( i \\in \\{1, 2\\} \\).\n   - Therefore, the total number of diaper changes required per day for both Object_As is:\n     \\[\n     D = R(O_1, n) + R(O_2, n) = n \\cdot m = 5 \\cdot 2 = 10\n     \\]\n\n2. **Diapers Changed by Entity_A's Wife**:\n   - Entity_A's wife changes half of the total diapers:\n     \\[\n     H = \\frac{D}{2} = \\frac{10}{2} = 5\n     \\]\n\n3. **Diapers Changed by Entity_A**:\n   - The number of diapers changed by Entity_A is the total changes minus those changed by his wife:\n     \\[\n     C(E, d) = D - H = 10 - 5 = 5\n     \\]\n\n### Explanation (s3)\n\nStep 1: Calculate the total number of diaper changes required for both Object_As. Since each Object_A requires 5 changes and there are 2 Object_As:\n\\[\nD = 5 \\cdot 2 = 10\n\\]\n\nStep 2: Determine how many diapers are changed by Entity_A's wife. She changes half of the total:\n\\[\nH = \\frac{D}{2} = \\frac{10}{2} = 5\n\\]\n\nStep 3: Calculate how many diapers Entity_A changes. This is the total changes minus those changed by his wife:\n\\[\nC(E, d) = D - H = 10 - 5 = 5\n\\]\n\n### Answering (s4)\n\nThe answer is: 5",
+              "extracted_answer": 5.0,
+              "time_ms": 50232,
+              "tokens": 1005,
+              "cache_hit": true,
+              "_cached_at": 1778193020.3523612,
+              "_cache_hit": true,
+              "correct": true
+            }
+          }
+        },
+        "structural_swap": {
+          "scoreable": true,
+          "ground_truth": 5.0,
+          "methods": {
+            "standard": {
+              "method_id": "standard",
+              "text": "Let's break down the problem step by step.\n\n1. **Determine the total number of diaper changes needed per day for both children:**\n   Each child requires 5 diaper changes per day. Since there are 2 children:\n   \\[\n   \\text{Total diaper changes} = 2 \\text{ children} \\times 5 \\text{ changes/child} = 10 \\text{ changes}\n   \\]\n\n2. **Determine how many diaper changes Jordan's wife does:**\n   Jordan's wife changes half of the diapers. Therefore, she changes:\n   \\[\n   \\text{Wife's changes} = \\frac{10 \\text{ changes}}{2} = 5 \\text{ changes}\n   \\]\n\n3. **Determine how many diaper changes Jordan does:**\n   Since Jordan's wife changes 5 diapers, the remaining changes that Jordan must do are:\n   \\[\n   \\text{Jordan's changes} = 10 \\text{ changes} - 5 \\text{ changes} = 5 \\text{ changes}\n   \\]\n\nThus, Jordan changes 5 diapers per day.\n\nThe final answer is:\n#### 5",
+              "extracted_answer": 5.0,
+              "time_ms": 20962,
+              "tokens": 317,
+              "cache_hit": false,
+              "correct": true
+            },
+            "zeroshotcot": {
+              "method_id": "zeroshotcot",
+              "text": "To find out how many diapers Jordan changes per day, we can follow these steps:\n\n1. **Determine the total number of diaper changes needed per day for both children**:\n   - Each child requires 5 diaper changes per day.\n   - Since there are 2 children, the total number of diaper changes per day is:\n     \\[\n     2 \\text{ children} \\times 5 \\text{ changes/child} = 10 \\text{ changes}\n     \\]\n\n2. **Calculate how many diaper changes Jordan's wife does**:\n   - Jordan's wife changes half of the total diaper changes.\n   - Therefore, the number of changes she does is:\n     \\[\n     \\frac{10 \\text{ changes}}{2} = 5 \\text{ changes}\n     \\]\n\n3. **Determine how many diaper changes Jordan does**:\n   - Since Jordan's wife changes 5 diapers, the remaining changes that Jordan must do is:\n     \\[\n     10 \\text{ changes} - 5 \\text{ changes} = 5 \\text{ changes}\n     \\]\n\nThus, Jordan changes 5 diapers per day.\n\n#### 5",
+              "extracted_answer": 5.0,
+              "time_ms": 21630,
+              "tokens": 323,
+              "cache_hit": false,
+              "correct": true
+            },
+            "cot": {
+              "method_id": "cot",
+              "text": "First, we need to determine the total number of diaper changes required for both children. Each child requires 5 diaper changes per day, and there are 2 children:\n\nTotal diaper changes = 2 children \u00d7 5 changes/child = 10 changes per day.\n\nJordan's wife changes half of the diapers, so Jordan changes the other half. \n\nHalf of the total diaper changes = 10 changes \u00f7 2 = 5 changes.\n\nThus, Jordan changes 5 diapers per day.\n\n#### 5",
+              "extracted_answer": 5.0,
+              "time_ms": 20601,
+              "tokens": 581,
+              "cache_hit": false,
+              "correct": true
+            },
+            "quasar": {
+              "method_id": "quasar",
+              "text": "### Abstraction (s1)\n\n1. **Predicates**:\n   - \\( C(x) \\): \"Child \\( x \\) requires diaper changes.\"\n   - \\( D(y) \\): \"Diaper change \\( y \\) is performed by Jordan's wife.\"\n   - \\( H(z) \\): \"Diaper change \\( z \\) is performed by Jordan.\"\n\n2. **Variables**:\n   - \\( n \\): Number of children (in this case, \\( n = 2 \\)).\n   - \\( d \\): Number of diaper changes required per child per day (in this case, \\( d = 5 \\)).\n   - \\( D_{total} \\): Total number of diaper changes required per day.\n   - \\( D_{wife} \\): Number of diaper changes performed by Jordan's wife.\n   - \\( D_{Jordan} \\): Number of diaper changes performed by Jordan.\n\n3. **Constants**:\n   - \\( 2 \\): The number of children.\n   - \\( 5 \\): The number of diaper changes each child requires per day.\n\n### Formalisation (s2)\n\n1. **Total Diaper Changes**:\n   \\[\n   D_{total} = n \\times d\n   \\]\n   where \\( n = 2 \\) and \\( d = 5 \\).\n\n2. **Diaper Changes by Jordan's Wife**:\n   \\[\n   D_{wife} = \\frac{D_{total}}{2}\n   \\]\n\n3. **Diaper Changes by Jordan**:\n   \\[\n   D_{Jordan} = D_{total} - D_{wife}\n   \\]\n\n### Explanation (s3)\n\n**Step 1**: Calculate the total number of diaper changes required per day.\n\\[\nD_{total} = n \\times d = 2 \\times 5 = 10\n\\]\n\n**Step 2**: Calculate the number of diaper changes performed by Jordan's wife.\n\\[\nD_{wife} = \\frac{D_{total}}{2} = \\frac{10}{2} = 5\n\\]\n\n**Step 3**: Calculate the number of diaper changes performed by Jordan.\n\\[\nD_{Jordan} = D_{total} - D_{wife} = 10 - 5 = 5\n\\]\n\n### Answering (s4)\n\nThe answer is: Jordan changes 5 diapers per day.",
+              "extracted_answer": 5.0,
+              "time_ms": 28639,
+              "tokens": 917,
+              "cache_hit": false,
+              "correct": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "problem_id": 57,
+      "question": "A wooden bridge can carry no more than 5000 pounds. A delivery truck filled with identical boxes, each weighing 15 pounds, will pass over the bridge. The combined weight of the driver and the empty truck is 3755 pounds. What is the maximum number of boxes which can be loaded onto the truck while not exceeding the bridge's weight limit?",
+      "variants": {
+        "original": {
+          "scoreable": true,
+          "ground_truth": 83.0,
+          "methods": {
+            "standard": {
+              "method_id": "standard",
+              "text": "To find the maximum number of boxes that can be loaded onto the truck without exceeding the bridge's weight limit, we first need to determine how much weight can still be added to the truck.\n\n1. **Calculate the total weight limit of the bridge:**\n   \\[\n   \\text{Weight limit} = 5000 \\text{ pounds}\n   \\]\n\n2. **Calculate the current weight of the truck and driver:**\n   \\[\n   \\text{Current weight} = 3755 \\text{ pounds}\n   \\]\n\n3. **Determine the remaining weight capacity of the bridge:**\n   \\[\n   \\text{Remaining capacity} = \\text{Weight limit} - \\text{Current weight}\n   \\]\n   \\[\n   \\text{Remaining capacity} = 5000 - 3755 = 1245 \\text{ pounds}\n   \\]\n\n4. **Calculate the weight of each box:**\n   \\[\n   \\text{Weight of each box} = 15 \\text{ pounds}\n   \\]\n\n5. **Determine the maximum number of boxes that can be added:**\n   \\[\n   \\text{Maximum number of boxes} = \\frac{\\text{Remaining capacity}}{\\text{Weight of each box}}\n   \\]\n   \\[\n   \\text{Maximum number of boxes} = \\frac{1245}{15} = 83\n   \\]\n\nThus, the maximum number of boxes that can be loaded onto the truck while not exceeding the bridge's weight limit is 83.\n\n#### 83",
+              "extracted_answer": 83.0,
+              "time_ms": 25093,
+              "tokens": 431,
+              "cache_hit": true,
+              "_cached_at": 1778193025.5512807,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "zeroshotcot": {
+              "method_id": "zeroshotcot",
+              "text": "To determine the maximum number of boxes that can be loaded onto the truck without exceeding the bridge's weight limit, we can follow these steps:\n\n1. **Identify the weight limit of the bridge**: The bridge can carry a maximum of 5000 pounds.\n\n2. **Calculate the current weight of the truck and driver**: The combined weight of the driver and the empty truck is 3755 pounds.\n\n3. **Determine the remaining weight capacity of the bridge**: \n   \\[\n   \\text{Remaining weight capacity} = \\text{Weight limit of the bridge} - \\text{Weight of truck and driver}\n   \\]\n   \\[\n   \\text{Remaining weight capacity} = 5000 \\text{ pounds} - 3755 \\text{ pounds} = 1245 \\text{ pounds}\n   \\]\n\n4. **Calculate the weight of each box**: Each box weighs 15 pounds.\n\n5. **Determine the maximum number of boxes that can be loaded**: \n   To find the maximum number of boxes, we divide the remaining weight capacity by the weight of each box:\n   \\[\n   \\text{Maximum number of boxes} = \\frac{\\text{Remaining weight capacity}}{\\text{Weight of each box}} = \\frac{1245 \\text{ pounds}}{15 \\text{ pounds/box}}\n   \\]\n   Performing the division:\n   \\[\n   \\text{Maximum number of boxes} = 83\n   \\]\n\nThus, the maximum number of boxes that can be loaded onto the truck while not exceeding the bridge's weight limit is 83.\n\n#### 83",
+              "extracted_answer": 83.0,
+              "time_ms": 26577,
+              "tokens": 451,
+              "cache_hit": true,
+              "_cached_at": 1778193027.035741,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "cot": {
+              "method_id": "cot",
+              "text": "To find the maximum number of boxes that can be loaded onto the truck without exceeding the bridge's weight limit, we start by determining the total weight capacity of the bridge and the current weight of the truck and driver.\n\n1. The weight limit of the bridge is 5000 pounds.\n2. The combined weight of the driver and the empty truck is 3755 pounds.\n3. We need to find out how much weight can still be added without exceeding the limit:\n   \\[\n   \\text{Weight capacity remaining} = \\text{Weight limit} - \\text{Current weight} = 5000 - 3755 = 1245 \\text{ pounds}\n   \\]\n\n4. Each box weighs 15 pounds. To find the maximum number of boxes that can be added, we divide the remaining weight capacity by the weight of each box:\n   \\[\n   \\text{Maximum number of boxes} = \\frac{\\text{Weight capacity remaining}}{\\text{Weight of each box}} = \\frac{1245}{15}\n   \\]\n\n5. Performing the division:\n   \\[\n   \\frac{1245}{15} = 83\n   \\]\n\nThus, the maximum number of boxes that can be loaded onto the truck while not exceeding the bridge's weight limit is 83.\n\n#### 83",
+              "extracted_answer": 83.0,
+              "time_ms": 26302,
+              "tokens": 782,
+              "cache_hit": true,
+              "_cached_at": 1778193026.7611835,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "quasar": {
+              "method_id": "quasar",
+              "text": "### Abstraction (s1)\n\n1. **Predicates**:\n   - \\( W_b \\): The weight limit of the bridge.\n   - \\( W_t \\): The weight of the truck and driver.\n   - \\( W_{box} \\): The weight of each box.\n   - \\( N \\): The number of boxes loaded onto the truck.\n\n2. **Variables**:\n   - \\( W_b = 5000 \\) pounds (constant).\n   - \\( W_t = 3755 \\) pounds (constant).\n   - \\( W_{box} = 15 \\) pounds (constant).\n   - \\( N \\): The variable representing the number of boxes.\n\n3. **Constants**:\n   - \\( 5000 \\): The maximum weight the bridge can carry.\n   - \\( 3755 \\): The combined weight of the driver and the empty truck.\n   - \\( 15 \\): The weight of each box.\n\n### Formalisation (s2)\n\nTo compute the maximum number of boxes \\( N \\) that can be loaded onto the truck without exceeding the bridge's weight limit, we need to establish the following equation based on the constraints:\n\n\\[\nW_t + N \\cdot W_{box} \\leq W_b\n\\]\n\nSubstituting the known values:\n\n\\[\n3755 + N \\cdot 15 \\leq 5000\n\\]\n\nThis equation asserts that the total weight of the truck, driver, and boxes must not exceed the bridge's weight limit.\n\n### Explanation (s3)\n\nStep 1: Rearranging the inequality to isolate \\( N \\):\n\n\\[\nN \\cdot 15 \\leq 5000 - 3755\n\\]\n\nStep 2: Calculate the right-hand side:\n\n\\[\n5000 - 3755 = 1245\n\\]\n\nStep 3: Now, substitute this value back into the inequality:\n\n\\[\nN \\cdot 15 \\leq 1245\n\\]\n\nStep 4: Divide both sides by 15 to solve for \\( N \\):\n\n\\[\nN \\leq \\frac{1245}{15}\n\\]\n\nStep 5: Calculate \\( \\frac{1245}{15} \\):\n\n\\[\n\\frac{1245}{15} = 83\n\\]\n\nThus, the maximum number of boxes \\( N \\) that can be loaded onto the truck without exceeding the bridge's weight limit is 83.\n\n### Answering (s4)\n\nThe answer is: 83",
+              "extracted_answer": 83.0,
+              "time_ms": 36208,
+              "tokens": 973,
+              "cache_hit": true,
+              "_cached_at": 1778193036.6666873,
+              "_cache_hit": true,
+              "correct": true
+            }
+          }
+        },
+        "numerical_swap": {
+          "scoreable": false,
+          "ground_truth": null,
+          "methods": {
+            "standard": {
+              "method_id": "standard",
+              "text": "To find the maximum number of boxes that can be loaded onto the truck without exceeding the bridge's weight limit, we first need to determine the total weight that can be added to the truck.\n\n1. The weight limit of the bridge is 20000 pounds.\n2. The combined weight of the driver and the empty truck is 15020 pounds.\n\nNow, we can calculate the maximum additional weight that can be added to the truck:\n\n\\[\n\\text{Maximum additional weight} = \\text{Weight limit} - \\text{Weight of driver and empty truck}\n\\]\n\\[\n\\text{Maximum additional weight} = 20000 - 15020 = 4970 \\text{ pounds}\n\\]\n\nNext, we need to determine how many boxes can be added without exceeding this additional weight. Each box weighs 60 pounds, so we can find the maximum number of boxes by dividing the maximum additional weight by the weight of each box:\n\n\\[\n\\text{Maximum number of boxes} = \\frac{\\text{Maximum additional weight}}{\\text{Weight of each box}} = \\frac{4970}{60}\n\\]\n\nCalculating this gives:\n\n\\[\n\\text{Maximum number of boxes} = 82.8333\n\\]\n\nSince we cannot load a fraction of a box, we take the whole number part:\n\n\\[\n\\text{Maximum number of boxes} = 82\n\\]\n\nThus, the maximum number of boxes that can be loaded onto the truck while not exceeding the bridge's weight limit is:\n\n#### 82",
+              "extracted_answer": 82.0,
+              "time_ms": 5722,
+              "tokens": 428,
+              "cache_hit": true,
+              "_cached_at": 1778193553.5179582,
+              "_cache_hit": true,
+              "correct": null
+            },
+            "zeroshotcot": {
+              "method_id": "zeroshotcot",
+              "text": "To determine the maximum number of boxes that can be loaded onto the truck without exceeding the bridge's weight limit, we can follow these steps:\n\n1. **Identify the weight limit of the bridge**: The bridge can carry a maximum of 20,000 pounds.\n\n2. **Calculate the weight of the truck and driver**: The combined weight of the driver and the empty truck is 15,020 pounds.\n\n3. **Determine the remaining weight capacity of the bridge**: \n   \\[\n   \\text{Remaining weight capacity} = \\text{Weight limit of the bridge} - \\text{Weight of truck and driver}\n   \\]\n   \\[\n   \\text{Remaining weight capacity} = 20000 - 15020 = 4970 \\text{ pounds}\n   \\]\n\n4. **Calculate the weight of each box**: Each box weighs 60 pounds.\n\n5. **Determine the maximum number of boxes that can be loaded**: \n   \\[\n   \\text{Maximum number of boxes} = \\frac{\\text{Remaining weight capacity}}{\\text{Weight of each box}}\n   \\]\n   \\[\n   \\text{Maximum number of boxes} = \\frac{4970}{60} \\approx 82.8333\n   \\]\n\n   Since we cannot load a fraction of a box, we take the whole number part:\n   \\[\n   \\text{Maximum number of boxes} = 82\n   \\]\n\nThus, the maximum number of boxes that can be loaded onto the truck while not exceeding the bridge's weight limit is 82.\n\n#### 82",
+              "extracted_answer": 82.0,
+              "time_ms": 4324,
+              "tokens": 445,
+              "cache_hit": true,
+              "_cached_at": 1778193552.1255865,
+              "_cache_hit": true,
+              "correct": null
+            },
+            "cot": {
+              "method_id": "cot",
+              "text": "To find the maximum number of boxes that can be loaded onto the truck without exceeding the bridge's weight limit, we need to follow these steps:\n\n1. **Determine the total weight limit of the bridge**: The bridge can carry a maximum of 20,000 pounds.\n\n2. **Calculate the weight of the truck and driver**: The combined weight of the driver and the empty truck is 15,020 pounds.\n\n3. **Calculate the remaining weight capacity of the bridge**: \n   \\[\n   \\text{Remaining weight capacity} = \\text{Weight limit} - \\text{Weight of truck and driver}\n   \\]\n   \\[\n   \\text{Remaining weight capacity} = 20000 - 15020 = 4970 \\text{ pounds}\n   \\]\n\n4. **Determine the weight of each box**: Each box weighs 60 pounds.\n\n5. **Calculate the maximum number of boxes that can be loaded**: \n   \\[\n   \\text{Maximum number of boxes} = \\frac{\\text{Remaining weight capacity}}{\\text{Weight of each box}}\n   \\]\n   \\[\n   \\text{Maximum number of boxes} = \\frac{4970}{60} \\approx 82.8333\n   \\]\n   Since we cannot load a fraction of a box, we take the whole number part, which is 82.\n\nThus, the maximum number of boxes that can be loaded onto the truck while not exceeding the bridge's weight limit is 82.\n\n#### 82",
+              "extracted_answer": 82.0,
+              "time_ms": 6158,
+              "tokens": 825,
+              "cache_hit": true,
+              "_cached_at": 1778193553.9646552,
+              "_cache_hit": true,
+              "correct": null
+            },
+            "quasar": {
+              "method_id": "quasar",
+              "text": "### Abstraction (s1)\n\n1. **Predicates**:\n   - \\( W_b \\): The maximum weight the bridge can carry.\n   - \\( W_t \\): The weight of the truck and driver.\n   - \\( W_{box} \\): The weight of each box.\n   - \\( N \\): The number of boxes loaded onto the truck.\n\n2. **Variables**:\n   - \\( W_b = 20000 \\) pounds (constant).\n   - \\( W_t = 15020 \\) pounds (constant).\n   - \\( W_{box} = 60 \\) pounds (constant).\n   - \\( N \\): The variable representing the number of boxes.\n\n3. **Constants**:\n   - \\( 20000 \\): The weight limit of the bridge.\n   - \\( 15020 \\): The combined weight of the driver and the empty truck.\n   - \\( 60 \\): The weight of each box.\n\n### Formalisation (s2)\n\nTo compute the maximum number of boxes \\( N \\) that can be loaded onto the truck without exceeding the bridge's weight limit, we need to establish the following equation based on the constraints:\n\n\\[\nW_t + N \\cdot W_{box} \\leq W_b\n\\]\n\nSubstituting the known values:\n\n\\[\n15020 + N \\cdot 60 \\leq 20000\n\\]\n\nThis equation asserts that the total weight of the truck, driver, and boxes must not exceed the bridge's weight limit.\n\n### Explanation (s3)\n\nStep 1: Rearranging the inequality to isolate \\( N \\):\n\n\\[\nN \\cdot 60 \\leq 20000 - 15020\n\\]\n\nStep 2: Calculate the right side of the inequality:\n\n\\[\n20000 - 15020 = 4970\n\\]\n\nStep 3: Now, substitute this value back into the inequality:\n\n\\[\nN \\cdot 60 \\leq 4970\n\\]\n\nStep 4: Divide both sides by 60 to solve for \\( N \\):\n\n\\[\nN \\leq \\frac{4970}{60}\n\\]\n\nStep 5: Calculate the division:\n\n\\[\nN \\leq 82.8333\n\\]\n\nSince \\( N \\) must be a whole number (as you cannot have a fraction of a box), we take the largest integer less than or equal to 82.8333, which is 82.\n\n### Answering (s4)\n\nThe answer is: 82.",
+              "extracted_answer": 82.0,
+              "time_ms": 11350,
+              "tokens": 979,
+              "cache_hit": true,
+              "_cached_at": 1778193559.1620624,
+              "_cache_hit": true,
+              "correct": null
+            }
+          }
+        },
+        "entity_swap": {
+          "scoreable": true,
+          "ground_truth": 83.0,
+          "methods": {
+            "standard": {
+              "method_id": "standard",
+              "text": "To find the maximum number of Object_As that can be loaded onto the truck without exceeding the bridge's weight limit, we first need to determine how much weight can still be added to the truck.\n\n1. The weight limit of the bridge is 5000 pounds.\n2. The combined weight of the driver and the empty truck is 3755 pounds.\n\nNow, we calculate the remaining weight capacity of the bridge:\n\n\\[\n\\text{Remaining weight capacity} = \\text{Weight limit} - \\text{Weight of driver and empty truck}\n\\]\n\\[\n\\text{Remaining weight capacity} = 5000 \\text{ pounds} - 3755 \\text{ pounds} = 1245 \\text{ pounds}\n\\]\n\nNext, we need to determine how many Object_As can be loaded onto the truck without exceeding this remaining weight capacity. Each Object_A weighs 15 pounds.\n\nTo find the maximum number of Object_As, we divide the remaining weight capacity by the weight of each Object_A:\n\n\\[\n\\text{Maximum number of Object_As} = \\frac{\\text{Remaining weight capacity}}{\\text{Weight of each Object_A}} = \\frac{1245 \\text{ pounds}}{15 \\text{ pounds}}\n\\]\n\nCalculating this gives:\n\n\\[\n\\text{Maximum number of Object_As} = 83\n\\]\n\nThus, the maximum number of Object_As that can be loaded onto the truck while not exceeding the bridge's weight limit is:\n\n#### 83",
+              "extracted_answer": 83.0,
+              "time_ms": 42874,
+              "tokens": 420,
+              "cache_hit": true,
+              "_cached_at": 1778193043.3333828,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "zeroshotcot": {
+              "method_id": "zeroshotcot",
+              "text": "To determine the maximum number of Object_As that can be loaded onto the truck without exceeding the bridge's weight limit, we can follow these steps:\n\n1. **Identify the weight limit of the bridge**: The bridge can carry a maximum of 5000 pounds.\n\n2. **Calculate the current weight of the truck and driver**: The combined weight of the driver and the empty truck is 3755 pounds.\n\n3. **Determine the remaining weight capacity of the bridge**: \n   \\[\n   \\text{Remaining weight capacity} = \\text{Weight limit of the bridge} - \\text{Weight of truck and driver}\n   \\]\n   \\[\n   \\text{Remaining weight capacity} = 5000 \\text{ pounds} - 3755 \\text{ pounds} = 1245 \\text{ pounds}\n   \\]\n\n4. **Calculate the weight of each Object_A**: Each Object_A weighs 15 pounds.\n\n5. **Determine the maximum number of Object_As that can be loaded**: \n   \\[\n   \\text{Maximum number of Object_As} = \\frac{\\text{Remaining weight capacity}}{\\text{Weight of each Object_A}}\n   \\]\n   \\[\n   \\text{Maximum number of Object_As} = \\frac{1245 \\text{ pounds}}{15 \\text{ pounds}} = 83\n   \\]\n\n6. **Check if the result is a whole number**: Since we can only load whole objects, we take the integer part of the division, which is 83.\n\nThus, the maximum number of Object_As that can be loaded onto the truck while not exceeding the bridge's weight limit is:\n\n#### 83",
+              "extracted_answer": 83.0,
+              "time_ms": 43087,
+              "tokens": 465,
+              "cache_hit": true,
+              "_cached_at": 1778193043.5464418,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "cot": {
+              "method_id": "cot",
+              "text": "To find the maximum number of Object_As that can be loaded onto the truck without exceeding the bridge's weight limit, we need to follow these steps:\n\n1. **Determine the total weight limit of the bridge**: The bridge can carry a maximum of 5000 pounds.\n\n2. **Calculate the current weight of the truck and driver**: The combined weight of the driver and the empty truck is 3755 pounds.\n\n3. **Calculate the remaining weight capacity of the bridge**: \n   \\[\n   \\text{Remaining weight capacity} = \\text{Weight limit} - \\text{Current weight} = 5000 - 3755 = 1245 \\text{ pounds}\n   \\]\n\n4. **Determine the weight of each Object_A**: Each Object_A weighs 15 pounds.\n\n5. **Calculate the maximum number of Object_As that can be loaded**: \n   \\[\n   \\text{Maximum number of Object_As} = \\frac{\\text{Remaining weight capacity}}{\\text{Weight of each Object_A}} = \\frac{1245}{15}\n   \\]\n\n   Performing the division:\n   \\[\n   \\frac{1245}{15} = 83\n   \\]\n\nThus, the maximum number of Object_As that can be loaded onto the truck while not exceeding the bridge's weight limit is 83.\n\n#### 83",
+              "extracted_answer": 83.0,
+              "time_ms": 47798,
+              "tokens": 794,
+              "cache_hit": true,
+              "_cached_at": 1778193048.2584937,
+              "_cache_hit": true,
+              "correct": true
+            },
+            "quasar": {
+              "method_id": "quasar",
+              "text": "### Abstraction (s1)\n\n1. **Predicates**:\n   - \\( W_b \\): The weight limit of the bridge.\n   - \\( W_t \\): The weight of the truck and driver.\n   - \\( W_o \\): The weight of one Object_A.\n   - \\( N \\): The number of Object_As loaded onto the truck.\n\n2. **Variables**:\n   - \\( W_b = 5000 \\) pounds (constant).\n   - \\( W_t = 3755 \\) pounds (constant).\n   - \\( W_o = 15 \\) pounds (constant).\n   - \\( N \\): The variable representing the number of Object_As.\n\n3. **Constants**:\n   - The weight limit of the bridge is a constant value of 5000 pounds.\n   - The weight of the truck and driver is a constant value of 3755 pounds.\n   - The weight of each Object_A is a constant value of 15 pounds.\n\n### Formalisation (s2)\n\nTo compute the maximum number of Object_As that can be loaded onto the truck without exceeding the bridge's weight limit, we need to establish the following relationship:\n\n- The total weight on the bridge when the truck is loaded with Object_As can be expressed as:\n  \\[\n  W_t + N \\cdot W_o \\leq W_b\n  \\]\n  \nWhere:\n- \\( W_t = 3755 \\) pounds (weight of the truck and driver).\n- \\( W_o = 15 \\) pounds (weight of one Object_A).\n- \\( W_b = 5000 \\) pounds (weight limit of the bridge).\n\n### Explanation (s3)\n\nStep 1: Set up the inequality based on the weight limit of the bridge:\n\\[\n3755 + N \\cdot 15 \\leq 5000\n\\]\n\nStep 2: Isolate \\( N \\) in the inequality:\n\\[\nN \\cdot 15 \\leq 5000 - 3755\n\\]\n\\[\nN \\cdot 15 \\leq 1245\n\\]\n\nStep 3: Divide both sides by 15 to solve for \\( N \\):\n\\[\nN \\leq \\frac{1245}{15}\n\\]\n\\[\nN \\leq 83\n\\]\n\nStep 4: Since \\( N \\) must be a whole number (you cannot load a fraction of an Object_A), we take the maximum integer value:\n\\[\nN = 83\n\\]\n\n### Answering (s4)\n\nThe answer is: 83.",
+              "extracted_answer": 83.0,
+              "time_ms": 59319,
+              "tokens": 989,
+              "cache_hit": true,
+              "_cached_at": 1778193059.7795634,
+              "_cache_hit": true,
+              "correct": true
+            }
+          }
+        },
+        "structural_swap": {
+          "scoreable": true,
+          "ground_truth": 83.0,
+          "methods": {
+            "standard": {
+              "method_id": "standard",
+              "text": "To find the maximum number of boxes that can be loaded onto the truck without exceeding the bridge's weight limit, we start by determining the total weight that can be added to the truck.\n\n1. The weight limit of the bridge is 5000 pounds.\n2. The combined weight of the driver and the empty truck is 3755 pounds.\n\nNow, we calculate the maximum additional weight that can be added to the truck:\n\n\\[\n\\text{Maximum additional weight} = \\text{Weight limit} - \\text{Weight of driver and empty truck}\n\\]\n\\[\n\\text{Maximum additional weight} = 5000 \\text{ pounds} - 3755 \\text{ pounds} = 1245 \\text{ pounds}\n\\]\n\nNext, we need to determine how many boxes can be loaded onto the truck without exceeding this additional weight. Each box weighs 15 pounds, so we can find the maximum number of boxes by dividing the maximum additional weight by the weight of each box:\n\n\\[\n\\text{Maximum number of boxes} = \\frac{\\text{Maximum additional weight}}{\\text{Weight of each box}} = \\frac{1245 \\text{ pounds}}{15 \\text{ pounds/box}}\n\\]\n\nCalculating this gives:\n\n\\[\n\\text{Maximum number of boxes} = \\frac{1245}{15} = 83\n\\]\n\nThus, the maximum number of boxes that can be loaded onto the truck while not exceeding the bridge's weight limit is 83.\n\n#### 83",
+              "extracted_answer": 83.0,
+              "time_ms": 7332,
+              "tokens": 425,
+              "cache_hit": false,
+              "correct": true
+            },
+            "zeroshotcot": {
+              "method_id": "zeroshotcot",
+              "text": "To determine the maximum number of boxes that can be loaded onto the truck without exceeding the bridge's weight limit, we can follow these steps:\n\n1. **Identify the weight limit of the bridge**: The bridge can carry a maximum of 5000 pounds.\n\n2. **Determine the current weight of the truck and driver**: The combined weight of the driver and the empty truck is 3755 pounds.\n\n3. **Calculate the remaining weight capacity of the bridge**: \n   \\[\n   \\text{Remaining weight capacity} = \\text{Weight limit of the bridge} - \\text{Weight of truck and driver}\n   \\]\n   \\[\n   \\text{Remaining weight capacity} = 5000 \\text{ pounds} - 3755 \\text{ pounds} = 1245 \\text{ pounds}\n   \\]\n\n4. **Determine the weight of each box**: Each box weighs 15 pounds.\n\n5. **Calculate the maximum number of boxes that can be loaded**: \n   \\[\n   \\text{Maximum number of boxes} = \\frac{\\text{Remaining weight capacity}}{\\text{Weight of each box}}\n   \\]\n   \\[\n   \\text{Maximum number of boxes} = \\frac{1245 \\text{ pounds}}{15 \\text{ pounds/box}} = 83\n   \\]\n\n6. **Check if the number of boxes is a whole number**: Since we can only load whole boxes, we take the integer part of the division, which is 83.\n\nThus, the maximum number of boxes that can be loaded onto the truck while not exceeding the bridge's weight limit is:\n\n#### 83",
+              "extracted_answer": 83.0,
+              "time_ms": 10878,
+              "tokens": 459,
+              "cache_hit": false,
+              "correct": true
+            },
+            "cot": {
+              "method_id": "cot",
+              "text": "To find the maximum number of boxes that can be loaded onto the truck without exceeding the bridge's weight limit, we start with the following information:\n\n1. The weight limit of the bridge is 5000 pounds.\n2. The combined weight of the driver and the empty truck is 3755 pounds.\n3. Each box weighs 15 pounds.\n\nFirst, we need to determine how much weight can still be added to the truck without exceeding the bridge's weight limit:\n\n\\[\n\\text{Weight limit} - \\text{Current weight} = 5000 - 3755 = 1245 \\text{ pounds}\n\\]\n\nNext, we need to find out how many boxes can be added without exceeding this remaining weight. Since each box weighs 15 pounds, we can calculate the maximum number of boxes by dividing the remaining weight by the weight of each box:\n\n\\[\n\\text{Maximum number of boxes} = \\frac{\\text{Remaining weight}}{\\text{Weight of each box}} = \\frac{1245}{15}\n\\]\n\nNow, we perform the division:\n\n\\[\n1245 \\div 15 = 83\n\\]\n\nThus, the maximum number of boxes that can be loaded onto the truck while not exceeding the bridge's weight limit is 83.\n\n#### 83",
+              "extracted_answer": 83.0,
+              "time_ms": 11076,
+              "tokens": 776,
+              "cache_hit": false,
+              "correct": true
+            },
+            "quasar": {
+              "method_id": "quasar",
+              "text": "### Abstraction (s1)\n\n1. **Predicates**:\n   - \\( C(x) \\): \"The combined weight of the driver and the empty truck is \\( x \\) pounds.\"\n   - \\( W(b) \\): \"The weight of each box is \\( b \\) pounds.\"\n   - \\( L(t) \\): \"The total load on the bridge is \\( t \\) pounds.\"\n   - \\( M \\): \"The maximum weight limit of the bridge is 5000 pounds.\"\n\n2. **Variables**:\n   - \\( D \\): The weight of the driver and the empty truck, which is 3755 pounds.\n   - \\( B \\): The number of boxes loaded onto the truck.\n   - \\( W \\): The weight of each box, which is 15 pounds.\n\n3. **Constants**:\n   - \\( M = 5000 \\): The maximum weight limit of the bridge.\n   - \\( D = 3755 \\): The combined weight of the driver and the empty truck.\n   - \\( W = 15 \\): The weight of each box.\n\n### Formalisation (s2)\n\nTo formalize the problem, we need to express the constraints mathematically:\n\n1. The total weight on the bridge when the truck is loaded with boxes can be expressed as:\n   \\[\n   L = D + B \\cdot W\n   \\]\n   where \\( L \\) is the total load on the bridge, \\( D \\) is the weight of the driver and the empty truck, \\( B \\) is the number of boxes, and \\( W \\) is the weight of each box.\n\n2. The constraint that the total load must not exceed the bridge's weight limit can be expressed as:\n   \\[\n   L \\leq M\n   \\]\n\n3. Substituting the expressions for \\( L \\), \\( D \\), and \\( W \\):\n   \\[\n   D + B \\cdot W \\leq M\n   \\]\n   or\n   \\[\n   3755 + 15B \\leq 5000\n   \\]\n\n### Explanation (s3)\n\nNow, we will solve the inequality step by step:\n\n**Step 1**: Rearrange the inequality to isolate \\( B \\):\n\\[\n15B \\leq 5000 - 3755\n\\]\n\n**Step 2**: Calculate the right-hand side:\n\\[\n5000 - 3755 = 1245\n\\]\nThus, we have:\n\\[\n15B \\leq 1245\n\\]\n\n**Step 3**: Divide both sides by 15 to solve for \\( B \\):\n\\[\nB \\leq \\frac{1245}{15}\n\\]\n\n**Step 4**: Calculate \\( \\frac{1245}{15} \\):\n\\[\n\\frac{1245}{15} = 83\n\\]\n\nThus, the maximum number of boxes \\( B \\) that can be loaded onto the truck without exceeding the bridge's weight limit is 83.\n\n### Answering (s4)\n\nThe answer is: 83.",
+              "extracted_answer": 83.0,
+              "time_ms": 21720,
+              "tokens": 1098,
+              "cache_hit": false,
+              "correct": true
+            }
+          }
+        }
+      }
+    }
+  ],
+  "timestamp": 1778249220.5324473
+}
